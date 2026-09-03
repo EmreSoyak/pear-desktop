@@ -193,53 +193,79 @@ Fixed by queuing handlers registered before the tray exists and applying them at
 
 ### The problem
 
-YouTube Music's repeat button cycles through three states — off, repeat all, repeat one. There is no way to loop a *section* of a track: the four bars you want to learn, a solo you want to hear ten times in a row, a lyric you're trying to transcribe. Repeat-one gets you the whole song each time.
+There is no way to loop a *section* of a track — the few bars you want to learn,
+a solo you want to hear ten times, a lyric you're transcribing. Repeat-one gives
+you the whole song each time.
 
 ### The solution
 
-A fourth position on the existing repeat button — **LR** — that loops between two points you mark in the current song. It is deliberately disposable: the moment you touch any other transport control, it is spent and gone. It never persists to another song, and never comes back if you return to this one.
+A dedicated **LR button** in the player bar, between repeat and shuffle. Arming
+it drops two draggable markers — `[` and `]` — onto the progress bar. Playback
+loops between them.
 
-The cycle becomes: `NONE → ALL → ONE → LR → NONE`
+It is deliberately disposable: the moment you touch another transport control it
+is spent, and it never survives a song change or a return to that song.
 
 ### How to use it
 
-1. Click the repeat button until the **LR** badge appears (one click past "repeat one")
-2. **Shift+click the progress bar** to set point **A** — the badge reads `LR A?` until you do
-3. **Shift+click again** to set point **B** — playback jumps to A and starts looping
-4. Plain clicks on the progress bar still seek normally; only shift+click marks points
+1. Click **LR** — `[` appears at 0:00, `]` at the end of the track
+2. Drag them to the section you want; playback drops into the range
+3. Hold **Shift** while aiming for a much larger grab area on the markers
+4. Click **LR** again to turn it off
 
-The badge shows the state at a glance: `LR A?` → `LR B?` → `LR A–B`.
+While armed, YouTube's red progress line is masked to the loop range, so the red
+only ever appears between the brackets.
 
 ### How it ends
 
-LR is spent — cleared entirely, points and all — by any of:
+| Action | Effect |
+|--------|--------|
+| Clicking the LR button | Off |
+| Any other player-bar control (repeat, shuffle, next, previous, like) | Spent |
+| **Play/pause** | **Safe** — LR stays armed |
+| Changing song | Spent, and it does not come back |
 
-| Action | Why |
-|--------|-----|
-| Clicking the repeat button | Advances the cycle LR → NONE |
-| Any other player-bar control (next, previous, shuffle, like…) | Explicit design: only play/pause is safe |
-| Changing song | LR is scoped to the track it was armed on |
-| Seeking outside the A–B region | You clearly want out of the loop |
-
-**Play/pause is the exception** — pausing and resuming keeps the loop armed.
+Nothing is persisted to config.
 
 ### How it works
 
-**Extending the cycle.** YouTube Music's repeat state machine only knows three modes, so LR cannot be a real fourth value inside it. Instead the plugin patches `ytmusic-player-bar.onRepeatButtonClick`: when a click would take the native cycle from `ONE` back to `NONE`, the plugin swallows it, holds the native mode at `ONE` (so the track can never advance out from under the loop), and drives the A–B loop itself. The next click cancels LR and lets the native cycle complete.
+**A separate button, not a fourth repeat mode.** The first design added LR as a
+fourth position on the repeat button. That could not work: reassigning
+`ytmusic-player-bar.onRepeatButtonClick` intercepts programmatic calls but not
+real mouse clicks, so YouTube's native cycle ran and the override never fired. A
+separate control avoids fighting a third-party state machine. The method patch
+remains only so that changing repeat mode through the API server or global
+shortcuts (`peard:switch-repeat`) also spends LR.
 
-Patching the *method* rather than listening for DOM clicks matters — `src/renderer.ts` calls `onRepeatButtonClick()` directly for the `peard:switch-repeat` IPC path (used by the API server and global shortcuts). A DOM-only hook would let those bypass the cancellation rule.
+**Marker geometry.** `#progress-bar`'s bounding rect is offset ~17px to the left
+of the track it represents, though its width is correct. Mapping time onto the
+element box put markers out by 1-3% — around 40 seconds on a one-hour track. The
+correct mapping treats the track as starting at viewport `x = 0` with the
+element's width, established by clicking the bar at known positions and reading
+back `currentTime` across three window sizes.
 
-**Loop precision.** `timeupdate` fires roughly 4×/second, so checking the loop point there alone overshoots B by up to 250ms — audible on a tight loop. The plugin uses `timeupdate` as a coarse guard and hands off to a 25ms timer for the last second before B.
+**Loop precision.** `timeupdate` fires ~4x/second, enough to overshoot the loop
+point by 250ms. It is used as a coarse guard, handing off to a 25ms timer for the
+last second before B. Measured overshoot: 0.03-0.06s.
 
-**The badge.** LR state is written to a `data-lr` attribute with an injected CSS `::after` rule. It deliberately does **not** touch the button's `title` attribute — `src/providers/song-info-front.ts` observes exactly that attribute and would broadcast a stale repeat mode over the API server and websocket stream.
+**Masking, not clipping.** The progress line is trimmed with `mask-image`;
+`clip-path` would also clip hit-testing and silently break seeking.
 
-**Playback Recovery interaction.** A short A–B loop makes `currentTime` oscillate rather than advance, which the Playback Recovery watchdog could read as a frozen player and "recover" by skipping the track. Limited Repeat publishes `window.__limitedRepeatActive` and Playback Recovery stands down while it is set.
+**`data-lr`, not `title`.** `src/providers/song-info-front.ts` observes the
+repeat button's `title` attribute and broadcasts `queue.repeatMode` to the API
+server and websocket clients, so writing that attribute would publish a stale
+repeat mode.
+
+**Playback Recovery interaction.** A short loop makes `currentTime` oscillate
+rather than advance, which the recovery watchdog could read as a frozen player
+and "fix" by skipping the track. LR publishes `window.__limitedRepeatActive` and
+Playback Recovery stands down while it is set.
 
 ### Config
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `logToConsole` | `false` | Log LR state transitions and loop points to the DevTools console |
+| `logToConsole` | `false` | Log LR state changes and loop points to the console |
 
 ### Files
 
@@ -247,7 +273,9 @@ Patching the *method* rather than listening for DOM clicks matters — `src/rend
 |------|------|
 | `src/plugins/limited-repeat/index.ts` | Full plugin (renderer-side) |
 | `src/plugins/playback-recovery/index.ts` | Stands down while LR is looping |
-| `src/i18n/resources/en.json` | Name, description, menu label |
+
+Design notes, measurements and CDP test harnesses live in
+[`z_development/limited-repeat/`](z_development/limited-repeat/).
 
 ---
 

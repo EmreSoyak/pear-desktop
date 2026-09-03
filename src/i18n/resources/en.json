@@ -606,7 +606,10 @@
       "name": "In-App Menu"
     },
     "limited-repeat": {
-      "description": "Adds a fourth repeat mode (LR) that loops between two points you mark in the current song, and is spent as soon as you touch another control",
+      "button": {
+        "title": "Limited Repeat — loop between two points in this song"
+      },
+      "description": "Adds a Limited Repeat button next to shuffle and repeat that loops between two points you mark in the current song, and is spent as soon as you touch another control",
       "menu": {
         "log-to-console": "Log limited repeat events to console"
       },

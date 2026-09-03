@@ -49,6 +49,18 @@ Built four new features, all opt-in with on/off toggles:
 - PR opened: pear-devs/pear-desktop#4428
 - Full documentation in `EMRE-FEATURES.md`
 
+### Session 5 — Limited Repeat (2026-09-03)
+
+Added **Limited Repeat**: an A-B loop driven by draggable `[` and `]` markers on
+the progress bar, with a dedicated button between repeat and shuffle. Verified
+against the running app over CDP rather than by eye.
+
+This session also introduced **`z_development/`** — per-feature design notes and
+runnable tests, plus `z_development/LESSONS.md`, which records the traps this
+project has already hit (a build process that can destroy the working install,
+YouTube's progress-bar geometry, Windows/Electron event quirks). **Read
+LESSONS.md before making changes.**
+
 ## How to Make Changes (Edit -> Build -> Launch)
 
 1. **Edit source code** in `Z:\z_youtube_player\src\` (or plugins, assets, etc.)
@@ -82,6 +94,7 @@ OPEN_DEVTOOLS=1 pnpm dev
 - `update-shortcut.ps1` — recreates the desktop shortcut pointing to the built exe
 - `icon.ico` — custom app icon
 - `EMRE-FEATURES.md` — full documentation of all custom features
+- `z_development/` — per-feature design notes, tests, and LESSONS.md (read first)
 - `src/index.ts` — main Electron entry point (DevTools patch is here)
 
 ## Tech Stack
