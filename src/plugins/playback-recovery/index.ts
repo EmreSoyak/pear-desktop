@@ -3,6 +3,12 @@ import { t } from '@/i18n';
 
 import type { MusicPlayer } from '@/types/music-player';
 
+// The limited-repeat plugin loops a short A-B region, which makes currentTime
+// oscillate rather than advance. Set by src/plugins/limited-repeat/index.ts.
+const isLimitedRepeatActive = () =>
+  (window as Window & { __limitedRepeatActive?: boolean })
+    .__limitedRepeatActive === true;
+
 export type PlaybackRecoveryConfig = {
   enabled: boolean;
   stallTimeoutMs: number;
@@ -182,6 +188,7 @@ export default createPlugin<
       // Core watchdog: every 3 seconds, check if playback is healthy
       this.watchdog = setInterval(() => {
         if (this.recovering) return;
+        if (isLimitedRepeatActive()) return;
 
         const video = this.getVideo();
         if (!video) return;
@@ -234,6 +241,7 @@ export default createPlugin<
 
     attemptRecovery(reason: string) {
       if (this.recovering) return;
+      if (isLimitedRepeatActive()) return;
 
       const maxRetries = this.config?.maxRetries ?? 5;
       this.consecutiveFailures++;

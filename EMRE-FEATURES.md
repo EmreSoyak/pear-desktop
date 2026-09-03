@@ -1,6 +1,6 @@
 # Feature Pack: Desktop Workflow Enhancements
 
-A set of four opt-in features for power users who run YouTube Music as a background audio companion on desktop — particularly those who use virtual desktops, minimize to tray, and want quick playback control without opening the full window.
+A set of five opt-in features for power users who run YouTube Music as a background audio companion on desktop — particularly those who use virtual desktops, minimize to tray, and want quick playback control without opening the full window.
 
 Every feature defaults to **off** and is toggled from the existing settings/plugin menu. No existing behavior is changed unless the user explicitly enables a feature.
 
@@ -187,6 +187,70 @@ Fixed by queuing handlers registered before the tray exists and applying them at
 
 ---
 
+## 5. Limited Repeat (LR)
+
+**Plugin** | Settings > Plugins > Limited Repeat
+
+### The problem
+
+YouTube Music's repeat button cycles through three states — off, repeat all, repeat one. There is no way to loop a *section* of a track: the four bars you want to learn, a solo you want to hear ten times in a row, a lyric you're trying to transcribe. Repeat-one gets you the whole song each time.
+
+### The solution
+
+A fourth position on the existing repeat button — **LR** — that loops between two points you mark in the current song. It is deliberately disposable: the moment you touch any other transport control, it is spent and gone. It never persists to another song, and never comes back if you return to this one.
+
+The cycle becomes: `NONE → ALL → ONE → LR → NONE`
+
+### How to use it
+
+1. Click the repeat button until the **LR** badge appears (one click past "repeat one")
+2. **Shift+click the progress bar** to set point **A** — the badge reads `LR A?` until you do
+3. **Shift+click again** to set point **B** — playback jumps to A and starts looping
+4. Plain clicks on the progress bar still seek normally; only shift+click marks points
+
+The badge shows the state at a glance: `LR A?` → `LR B?` → `LR A–B`.
+
+### How it ends
+
+LR is spent — cleared entirely, points and all — by any of:
+
+| Action | Why |
+|--------|-----|
+| Clicking the repeat button | Advances the cycle LR → NONE |
+| Any other player-bar control (next, previous, shuffle, like…) | Explicit design: only play/pause is safe |
+| Changing song | LR is scoped to the track it was armed on |
+| Seeking outside the A–B region | You clearly want out of the loop |
+
+**Play/pause is the exception** — pausing and resuming keeps the loop armed.
+
+### How it works
+
+**Extending the cycle.** YouTube Music's repeat state machine only knows three modes, so LR cannot be a real fourth value inside it. Instead the plugin patches `ytmusic-player-bar.onRepeatButtonClick`: when a click would take the native cycle from `ONE` back to `NONE`, the plugin swallows it, holds the native mode at `ONE` (so the track can never advance out from under the loop), and drives the A–B loop itself. The next click cancels LR and lets the native cycle complete.
+
+Patching the *method* rather than listening for DOM clicks matters — `src/renderer.ts` calls `onRepeatButtonClick()` directly for the `peard:switch-repeat` IPC path (used by the API server and global shortcuts). A DOM-only hook would let those bypass the cancellation rule.
+
+**Loop precision.** `timeupdate` fires roughly 4×/second, so checking the loop point there alone overshoots B by up to 250ms — audible on a tight loop. The plugin uses `timeupdate` as a coarse guard and hands off to a 25ms timer for the last second before B.
+
+**The badge.** LR state is written to a `data-lr` attribute with an injected CSS `::after` rule. It deliberately does **not** touch the button's `title` attribute — `src/providers/song-info-front.ts` observes exactly that attribute and would broadcast a stale repeat mode over the API server and websocket stream.
+
+**Playback Recovery interaction.** A short A–B loop makes `currentTime` oscillate rather than advance, which the Playback Recovery watchdog could read as a frozen player and "recover" by skipping the track. Limited Repeat publishes `window.__limitedRepeatActive` and Playback Recovery stands down while it is set.
+
+### Config
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `logToConsole` | `false` | Log LR state transitions and loop points to the DevTools console |
+
+### Files
+
+| File | Role |
+|------|------|
+| `src/plugins/limited-repeat/index.ts` | Full plugin (renderer-side) |
+| `src/plugins/playback-recovery/index.ts` | Stands down while LR is looping |
+| `src/i18n/resources/en.json` | Name, description, menu label |
+
+---
+
 ## Summary
 
 | Feature | Type | Toggle | Default | Platform |
@@ -195,6 +259,7 @@ Fixed by queuing handlers registered before the tray exists and applying them at
 | Playback Recovery | Plugin | Plugin settings | Off | All |
 | Virtual Desktop Awareness | Core setting | Options > Tray | Off | Windows, macOS, Linux |
 | Tray Hover Mini-Player | Plugin extension | Notifications > Interactive Settings | Off | Windows, macOS |
+| Limited Repeat | Plugin | Plugin settings | Off | All |
 
 All features are:
 - **Opt-in** — disabled by default, no impact on existing users
