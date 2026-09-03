@@ -74,6 +74,7 @@ export default createPlugin<
     seekedListener: (() => void) | null;
     endedListener: (() => void) | null;
     hookedVideo: HTMLVideoElement | null;
+    patchedBar: PlayerBar | null;
 
     log: (msg: string) => void;
     injectStyle: () => void;
@@ -94,7 +95,7 @@ export default createPlugin<
     onTimeUpdate: () => void;
     startFineTimer: () => void;
     clearFineTimer: () => void;
-    jumpToA: () => void;
+    jumpToA: (forcePlay?: boolean) => void;
     onSeeked: () => void;
   },
   LimitedRepeatConfig
@@ -136,6 +137,7 @@ export default createPlugin<
     seekedListener: null,
     endedListener: null,
     hookedVideo: null,
+    patchedBar: null,
 
     async start({ getConfig }) {
       this.config = await getConfig();
@@ -232,6 +234,7 @@ export default createPlugin<
       const original = bar.onRepeatButtonClick.bind(bar);
       bar.__lrOriginalRepeatClick = original;
       bar.__lrPatched = true;
+      this.patchedBar = bar;
 
       // Patching the method rather than listening for DOM clicks also covers
       // `peard:switch-repeat` (see src/renderer.ts), which calls this directly.
@@ -263,16 +266,20 @@ export default createPlugin<
       }
       delete bar.__lrOriginalRepeatClick;
       delete bar.__lrPatched;
+      this.patchedBar = null;
     },
 
     watchPlayerBar() {
       // YouTube can recreate the player bar; re-apply the patch when it does.
+      // This fires on every DOM mutation under body, and YouTube mutates
+      // constantly during playback - so key off the element's identity rather
+      // than the `__lrPatched` flag, which would spend LR mid-loop on any
+      // unlucky ordering (including our own teardown).
       this.playerBarObserver = new MutationObserver(() => {
         const bar = this.getPlayerBar();
-        if (bar && !bar.__lrPatched) {
-          this.cancel('player-bar-recreated');
-          this.patchRepeatButton();
-        }
+        if (!bar || bar === this.patchedBar) return;
+        this.cancel('player-bar-recreated');
+        this.patchRepeatButton();
       });
       this.playerBarObserver.observe(document.body, {
         childList: true,
@@ -404,7 +411,8 @@ export default createPlugin<
       this.seekedListener = () => this.onSeeked();
       this.endedListener = () => {
         if (this.lrActive && this.pointA !== null && this.pointB !== null) {
-          this.jumpToA();
+          // `ended` is never a deliberate pause, so always resume here.
+          this.jumpToA(true);
         }
       };
 
@@ -438,7 +446,7 @@ export default createPlugin<
       }
 
       const video = this.getVideo();
-      if (!video) return;
+      if (!video || video.paused) return;
 
       if (video.currentTime >= this.pointB) {
         this.jumpToA();
@@ -464,6 +472,7 @@ export default createPlugin<
           this.clearFineTimer();
           return;
         }
+        if (video.paused) return;
         if (video.currentTime >= this.pointB) {
           this.jumpToA();
         } else if (
@@ -483,17 +492,22 @@ export default createPlugin<
       }
     },
 
-    jumpToA() {
+    jumpToA(forcePlay = false) {
       const video = this.getVideo();
       if (!video || this.pointA === null) return;
+
+      const wasPlaying = !video.paused;
 
       this.clearFineTimer();
       this.selfSeek = true;
       // Setting `currentTime` directly is tighter than `api.seekTo` here.
       video.currentTime = this.pointA;
-      if (video.paused) {
+
+      // Only resume if playback was actually running - a deliberate pause
+      // must not be undone by the loop.
+      if ((wasPlaying || forcePlay) && video.paused) {
         void video.play().catch(() => {
-          /* ignore - the user may have paused deliberately */
+          /* ignore - playback may have been stopped deliberately */
         });
       }
     },
