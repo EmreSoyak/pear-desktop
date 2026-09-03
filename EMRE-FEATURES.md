@@ -1,6 +1,6 @@
 # Feature Pack: Desktop Workflow Enhancements
 
-A set of four opt-in features for power users who run YouTube Music as a background audio companion on desktop — particularly those who use virtual desktops, minimize to tray, and want quick playback control without opening the full window.
+A set of five opt-in features for power users who run YouTube Music as a background audio companion on desktop — particularly those who use virtual desktops, minimize to tray, and want quick playback control without opening the full window.
 
 Every feature defaults to **off** and is toggled from the existing settings/plugin menu. No existing behavior is changed unless the user explicitly enables a feature.
 
@@ -187,6 +187,98 @@ Fixed by queuing handlers registered before the tray exists and applying them at
 
 ---
 
+## 5. Limited Repeat (LR)
+
+**Plugin** | Settings > Plugins > Limited Repeat
+
+### The problem
+
+There is no way to loop a *section* of a track — the few bars you want to learn,
+a solo you want to hear ten times, a lyric you're transcribing. Repeat-one gives
+you the whole song each time.
+
+### The solution
+
+A dedicated **LR button** in the player bar, between repeat and shuffle. Arming
+it drops two draggable markers — `[` and `]` — onto the progress bar. Playback
+loops between them.
+
+It is deliberately disposable: the moment you touch another transport control it
+is spent, and it never survives a song change or a return to that song.
+
+### How to use it
+
+1. Click **LR** — `[` appears at 0:00, `]` at the end of the track
+2. Drag them to the section you want; playback drops into the range
+3. Hold **Shift** while aiming for a much larger grab area on the markers
+4. Click **LR** again to turn it off
+
+While armed, YouTube's red progress line is masked to the loop range, so the red
+only ever appears between the brackets.
+
+### How it ends
+
+| Action | Effect |
+|--------|--------|
+| Clicking the LR button | Off |
+| Any other player-bar control (repeat, shuffle, next, previous, like) | Spent |
+| **Play/pause** | **Safe** — LR stays armed |
+| Changing song | Spent, and it does not come back |
+
+Nothing is persisted to config.
+
+### How it works
+
+**A separate button, not a fourth repeat mode.** The first design added LR as a
+fourth position on the repeat button. That could not work: reassigning
+`ytmusic-player-bar.onRepeatButtonClick` intercepts programmatic calls but not
+real mouse clicks, so YouTube's native cycle ran and the override never fired. A
+separate control avoids fighting a third-party state machine. The method patch
+remains only so that changing repeat mode through the API server or global
+shortcuts (`peard:switch-repeat`) also spends LR.
+
+**Marker geometry.** `#progress-bar`'s bounding rect is offset ~17px to the left
+of the track it represents, though its width is correct. Mapping time onto the
+element box put markers out by 1-3% — around 40 seconds on a one-hour track. The
+correct mapping treats the track as starting at viewport `x = 0` with the
+element's width, established by clicking the bar at known positions and reading
+back `currentTime` across three window sizes.
+
+**Loop precision.** `timeupdate` fires ~4x/second, enough to overshoot the loop
+point by 250ms. It is used as a coarse guard, handing off to a 25ms timer for the
+last second before B. Measured overshoot: 0.03-0.06s.
+
+**Masking, not clipping.** The progress line is trimmed with `mask-image`;
+`clip-path` would also clip hit-testing and silently break seeking.
+
+**`data-lr`, not `title`.** `src/providers/song-info-front.ts` observes the
+repeat button's `title` attribute and broadcasts `queue.repeatMode` to the API
+server and websocket clients, so writing that attribute would publish a stale
+repeat mode.
+
+**Playback Recovery interaction.** A short loop makes `currentTime` oscillate
+rather than advance, which the recovery watchdog could read as a frozen player
+and "fix" by skipping the track. LR publishes `window.__limitedRepeatActive` and
+Playback Recovery stands down while it is set.
+
+### Config
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `logToConsole` | `false` | Log LR state changes and loop points to the console |
+
+### Files
+
+| File | Role |
+|------|------|
+| `src/plugins/limited-repeat/index.ts` | Full plugin (renderer-side) |
+| `src/plugins/playback-recovery/index.ts` | Stands down while LR is looping |
+
+Design notes, measurements and CDP test harnesses live in
+[`z_development/limited-repeat/`](z_development/limited-repeat/).
+
+---
+
 ## Summary
 
 | Feature | Type | Toggle | Default | Platform |
@@ -195,6 +287,7 @@ Fixed by queuing handlers registered before the tray exists and applying them at
 | Playback Recovery | Plugin | Plugin settings | Off | All |
 | Virtual Desktop Awareness | Core setting | Options > Tray | Off | Windows, macOS, Linux |
 | Tray Hover Mini-Player | Plugin extension | Notifications > Interactive Settings | Off | Windows, macOS |
+| Limited Repeat | Plugin | Plugin settings | Off | All |
 
 All features are:
 - **Opt-in** — disabled by default, no impact on existing users

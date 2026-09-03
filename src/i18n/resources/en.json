@@ -605,6 +605,16 @@
       },
       "name": "In-App Menu"
     },
+    "limited-repeat": {
+      "button": {
+        "title": "Limited Repeat — loop between two points in this song"
+      },
+      "description": "Adds a Limited Repeat button next to shuffle and repeat that loops between two points you mark in the current song, and is spent as soon as you touch another control",
+      "menu": {
+        "log-to-console": "Log limited repeat events to console"
+      },
+      "name": "Limited Repeat"
+    },
     "lumiastream": {
       "description": "Adds Lumia Stream support",
       "name": "Lumia Stream [Beta]"
