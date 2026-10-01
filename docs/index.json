@@ -1,0 +1,2085 @@
+{
+  "$comment": "Map of the codebase. Start here, then open the linked doc. Regenerate/keep in sync when changing a plugin.",
+  "generated": "2026-10-01",
+  "repo": "Z:/z_youtube_player (fork of th-ch/youtube-music a.k.a. pear-desktop; push to remote \"fork\", never \"origin\")",
+  "readFirst": [
+    "z_development/LESSONS.md",
+    "docs/README.md"
+  ],
+  "documents": [
+    {
+      "path": "docs/README.md",
+      "covers": "entry point, list of docs"
+    },
+    {
+      "path": "docs/architecture.md",
+      "covers": "process model, boot, plugin system, config, IPC channel reference, providers, tray/menu, build, types"
+    },
+    {
+      "path": "docs/player-bar.md",
+      "covers": "YouTube player-bar DOM (new ytmusic-miniplayer + old ytmusic-player-bar), dom-elements.ts helpers, how controls/feeds were ported, traps"
+    },
+    {
+      "path": "docs/dev-tooling.md",
+      "covers": "build/install, safe build, CDP harnesses, diagnostics, git remotes"
+    },
+    {
+      "path": "docs/changelog.md",
+      "covers": "all fork changes on top of upstream with commits"
+    },
+    {
+      "path": "docs/plugins/playback-audio.md",
+      "covers": "upstream plugins: playback-audio"
+    },
+    {
+      "path": "docs/plugins/appearance-ui.md",
+      "covers": "upstream plugins: appearance-ui"
+    },
+    {
+      "path": "docs/plugins/integrations.md",
+      "covers": "upstream plugins: integrations"
+    },
+    {
+      "path": "docs/plugins/content-library.md",
+      "covers": "upstream plugins: content-library"
+    },
+    {
+      "path": "docs/plugins/system-controls.md",
+      "covers": "upstream plugins: system-controls"
+    },
+    {
+      "path": "docs/custom/limited-repeat.md",
+      "covers": "Limited Repeat"
+    },
+    {
+      "path": "docs/custom/audio-only.md",
+      "covers": "Audio-Only Mode"
+    },
+    {
+      "path": "docs/custom/playback-recovery.md",
+      "covers": "Playback Recovery"
+    },
+    {
+      "path": "docs/custom/virtual-desktop.md",
+      "covers": "Virtual Desktop Awareness"
+    },
+    {
+      "path": "docs/custom/tray-hover-mini-player.md",
+      "covers": "Tray Hover Mini-Player"
+    },
+    {
+      "path": "docs/custom/interface-language.md",
+      "covers": "Interface Language Pinned to English"
+    }
+  ],
+  "userState": {
+    "configFile": "%APPDATA%/YouTube Music/config.json",
+    "snapshotAt": "2026-10-01",
+    "enabledPlugins": [
+      "notifications",
+      "video-toggle",
+      "audio-only",
+      "synced-lyrics",
+      "taskbar-mediacontrol",
+      "playback-recovery",
+      "limited-repeat"
+    ],
+    "options": {
+      "language": "en",
+      "tray": true,
+      "appVisible": false,
+      "resumeOnStart": true,
+      "trayMoveToCurrentDesktop": "(unset -> default false)"
+    },
+    "installedExe": "Z:/z_youtube_player/pack/win-unpacked/YouTube Music.exe (taskbar pin + Start Menu point here)"
+  },
+  "playerBar": {
+    "doc": "docs/player-bar.md",
+    "helpers": "src/providers/dom-elements.ts",
+    "current": "ytmusic-miniplayer (since 2026-10-01)",
+    "legacy": "ytmusic-player-bar",
+    "appStore": "document.querySelector('#queue').queue.store  (getState/subscribe)"
+  },
+  "tests": [
+    {
+      "path": "z_development/player-bar/tests/core-ipc-test.cjs",
+      "needs": "--remote-debugging-port=9222 --inspect=9229, fresh session",
+      "covers": "core IPC controls + state feeds",
+      "lastResult": "18/18 (2026-10-01)"
+    },
+    {
+      "path": "z_development/limited-repeat/tests/lr-newbar-test.cjs",
+      "needs": "--remote-debugging-port=9222",
+      "covers": "LR on new bar",
+      "lastResult": "23/23 (2026-10-01)"
+    },
+    {
+      "path": "z_development/limited-repeat/tests/lr-calib.cjs",
+      "needs": "--remote-debugging-port=9222; restart app after (viewport emulation sticks)",
+      "covers": "seek-bar geometry calibration"
+    }
+  ],
+  "core": [
+    {
+      "id": "core-boot",
+      "name": "Process model and boot sequence",
+      "domain": "core",
+      "doc": "docs/architecture.md#process-model-and-boot-sequence",
+      "source": [
+        "src/index.ts",
+        "src/preload.ts",
+        "src/renderer.ts",
+        "src/index.html",
+        "src/reset.d.ts"
+      ],
+      "summary": "Main/preload/renderer split, numbered main and renderer boot timelines (main plugins before menu and tray, #movie_player wait, onPlayerApiReady, peard:audio-can-play), the 2026-10-01 player-bar fallback pattern and DOM events"
+    },
+    {
+      "id": "core-plugin-system",
+      "name": "Plugin system",
+      "domain": "core",
+      "doc": "docs/architecture.md#plugin-system",
+      "source": [
+        "src/loader/main.ts",
+        "src/loader/preload.ts",
+        "src/loader/renderer.ts",
+        "src/loader/menu.ts",
+        "src/utils/index.ts",
+        "src/types/plugins.ts",
+        "src/types/contexts.ts",
+        "vite-plugins/plugin-importer.mts",
+        "vite-plugins/plugin-loader.mts",
+        "vite-plugins/i18n-importer.mts",
+        "src/virtual-module.d.ts",
+        "src/i18n/index.ts"
+      ],
+      "summary": "Glob discovery into virtual:plugins, pluginStub synthesis, createPlugin shape and lifecycle hooks, per-process ctx objects, loaders, runtime enable/disable via config.watch, i18n keys"
+    },
+    {
+      "id": "core-config",
+      "name": "Config",
+      "domain": "core",
+      "doc": "docs/architecture.md#config",
+      "source": [
+        "src/config/defaults.ts",
+        "src/config/index.ts",
+        "src/config/plugins.ts",
+        "src/config/store.ts"
+      ],
+      "summary": "electron-store at %APPDATA%\\YouTube Music\\config.json: every options.* key with default and reader, plugin config merge rule, migrations"
+    },
+    {
+      "id": "core-ipc",
+      "name": "IPC channel reference",
+      "domain": "core",
+      "doc": "docs/architecture.md#ipc-channel-reference",
+      "source": [
+        "src/index.ts",
+        "src/preload.ts",
+        "src/renderer.ts",
+        "src/loader/renderer.ts",
+        "src/providers/song-controls.ts",
+        "src/providers/song-info.ts",
+        "src/providers/song-info-front.ts",
+        "src/providers/app-controls.ts"
+      ],
+      "summary": "Every core IPC channel with direction, payload, sender and handler, plus song-controls API, song-info pipeline, setup-*-listener singletons and per-plugin internal channels"
+    },
+    {
+      "id": "core-providers",
+      "name": "Providers",
+      "domain": "core",
+      "doc": "docs/architecture.md#providers",
+      "source": [
+        "src/providers/app-controls.ts",
+        "src/providers/decorators.ts",
+        "src/providers/dom-elements.ts",
+        "src/providers/extracted-data.ts",
+        "src/providers/prompt-options.ts",
+        "src/providers/protocol-handler.ts",
+        "src/providers/song-controls.ts",
+        "src/providers/song-info.ts",
+        "src/providers/song-info-front.ts",
+        "src/providers/youtube-language.ts"
+      ],
+      "summary": "One section per provider: app controls, decorators, new/legacy player-bar DOM helpers and app store, protocol handler, SongInfo build and events, English PREF cookie pin"
+    },
+    {
+      "id": "core-tray-menu",
+      "name": "Tray, menu and window utils",
+      "domain": "core",
+      "doc": "docs/architecture.md#tray-menu-and-window-utils",
+      "source": [
+        "src/tray.ts",
+        "src/menu.ts",
+        "src/window-utils.ts"
+      ],
+      "summary": "Tray creation and queued click/double-click/mouse-move handlers, application menu and Options tree, virtual-desktop-aware show, custom features touching core"
+    },
+    {
+      "id": "core-build",
+      "name": "Build and packaging",
+      "domain": "core",
+      "doc": "docs/architecture.md#build-and-packaging",
+      "source": [
+        "electron.vite.config.mts",
+        "electron-builder.yml",
+        "package.json",
+        "patches"
+      ],
+      "summary": "electron-vite three-build config, electron-builder targets with output to pack/, package.json scripts, purpose of each pnpm patch"
+    },
+    {
+      "id": "core-types",
+      "name": "Types",
+      "domain": "core",
+      "doc": "docs/architecture.md#types",
+      "source": [
+        "src/types/datahost-get-state.ts",
+        "src/types/music-player.ts",
+        "src/types/queue.ts",
+        "src/types/player-api-events.ts",
+        "src/types/get-player-response.ts",
+        "src/types/contexts.ts",
+        "src/types/plugins.ts"
+      ],
+      "summary": "One line per src/types file; GetState app-store shape and the MusicPlayer (#movie_player) API"
+    }
+  ],
+  "custom": [
+    {
+      "id": "limited-repeat",
+      "name": "Limited Repeat",
+      "domain": "custom",
+      "doc": "docs/custom/limited-repeat.md",
+      "origin": "custom",
+      "summary": "A-B loop: LR button after Repeat drops draggable [ ] markers on the seek bar; disposable (spent by other controls, song change, repeat change).",
+      "source": [
+        "src/plugins/limited-repeat/index.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.limited-repeat.enabled",
+        "plugins.limited-repeat.logToConsole"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        ".ytmusicPlayerControlsRepeatButton",
+        ".ytmusicPlayerControlsMainControls",
+        "input.ytMusicMiniPlayerProgressBar",
+        ".ytMusicMiniPlayerProgressBarWrapper",
+        ".ytmusicPlayerControlsPlayPauseButton",
+        "ytmusic-miniplayer",
+        "#queue (store)",
+        "video"
+      ],
+      "globals": [
+        "window.__limitedRepeatActive",
+        "window.__limitedRepeat"
+      ],
+      "tests": [
+        "z_development/limited-repeat/tests/lr-newbar-test.cjs"
+      ],
+      "newPlayerBarStatus": "ported 2026-10-01 - verified 23/23 live",
+      "userEnabled": true
+    },
+    {
+      "id": "audio-only",
+      "name": "Audio-Only Mode",
+      "domain": "custom",
+      "doc": "docs/custom/audio-only.md",
+      "origin": "custom",
+      "summary": "Forces ATV_PREFERRED playback mode, tiny quality, hides video and shows album art to save ~300MB RAM.",
+      "source": [
+        "src/plugins/audio-only/index.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.audio-only.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [
+        "ytmusic-player",
+        "#movie_player",
+        "#song-video.ytmusic-player",
+        "#song-image",
+        "video"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "playback-recovery",
+      "name": "Playback Recovery",
+      "domain": "custom",
+      "doc": "docs/custom/playback-recovery.md",
+      "origin": "custom",
+      "summary": "Watchdog (3s) detects dead/frozen/buffer-exhausted playback and escalates seek -> seek+1s -> next track; stands down while LR is active.",
+      "source": [
+        "src/plugins/playback-recovery/index.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.playback-recovery.enabled",
+        "plugins.playback-recovery.stallTimeoutMs",
+        "plugins.playback-recovery.maxRetries",
+        "plugins.playback-recovery.logToConsole"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "video"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "virtual-desktop",
+      "name": "Virtual Desktop Awareness",
+      "domain": "custom",
+      "doc": "docs/custom/virtual-desktop.md",
+      "origin": "custom",
+      "summary": "Option to show the window on the current virtual desktop (pin/unpin setVisibleOnAllWorkspaces); also deferred tray-handler queue.",
+      "source": [
+        "src/window-utils.ts",
+        "src/tray.ts",
+        "src/index.ts",
+        "src/menu.ts",
+        "src/config/defaults.ts"
+      ],
+      "entryPoints": [
+        "main"
+      ],
+      "configKeys": [
+        "options.trayMoveToCurrentDesktop"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "kind": "core-option"
+    },
+    {
+      "id": "tray-hover-mini-player",
+      "name": "Tray Hover Mini-Player",
+      "domain": "custom",
+      "doc": "docs/custom/tray-hover-mini-player.md",
+      "origin": "custom",
+      "summary": "Hover the tray icon for a floating card with art, title, artist and prev/play/next; part of the notifications plugin.",
+      "source": [
+        "src/plugins/notifications/hover-popup.ts",
+        "assets/hover-popup.html",
+        "src/plugins/notifications/main.ts",
+        "src/plugins/notifications/index.ts",
+        "src/plugins/notifications/menu.ts",
+        "src/plugins/notifications/interactive.ts",
+        "src/tray.ts"
+      ],
+      "entryPoints": [
+        "main",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.notifications.hoverControls"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "peard:previous-video",
+        "peard:next-video",
+        "peard:toggle-play (via songControls.playPause)"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "prev/next depended on old bar via renderer IPC - fixed 2026-10-01, verified",
+      "kind": "plugin-extension",
+      "parentPlugin": "notifications"
+    },
+    {
+      "id": "interface-language",
+      "name": "Interface Language Pinned to English",
+      "domain": "custom",
+      "doc": "docs/custom/interface-language.md",
+      "origin": "custom",
+      "summary": "Writes hl=en into the YouTube PREF cookie before load and re-asserts it on every PREF change.",
+      "source": [
+        "src/providers/youtube-language.ts",
+        "src/index.ts"
+      ],
+      "entryPoints": [
+        "main"
+      ],
+      "configKeys": [],
+      "defaultEnabled": true,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "kind": "core-always-on"
+    }
+  ],
+  "plugins": [
+    {
+      "id": "audio-compressor",
+      "name": "Audio Compressor",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#audio-compressor-audio-compressor",
+      "origin": "upstream",
+      "summary": "Inserts a DynamicsCompressorNode (threshold -50, ratio 12) between the shared MediaElementSource and the destination.",
+      "source": [
+        "src/plugins/audio-compressor.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.audio-compressor.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "crossfade",
+      "name": "Crossfade [Beta]",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#crossfade-beta-crossfade",
+      "origin": "upstream",
+      "summary": "Fades the old song out over the new one using a muted, synced Howler copy of the stream (URL fetched via youtubei.js in the backend).",
+      "source": [
+        "src/plugins/crossfade/index.ts",
+        "src/plugins/crossfade/fader.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.crossfade.enabled",
+        "plugins.crossfade.fadeInDuration",
+        "plugins.crossfade.fadeOutDuration",
+        "plugins.crossfade.secondsBeforeEnd",
+        "plugins.crossfade.fadeScaling"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "audio-url"
+      ],
+      "domAnchors": [
+        "video",
+        ".next-button"
+      ],
+      "newPlayerBarStatus": "partially affected: index.ts:278 clicks dead '.next-button', so the early transition (secondsBeforeEnd) never fires; navigation-triggered crossfades still run. Fix: getPlayerControl('Next')",
+      "userEnabled": null
+    },
+    {
+      "id": "equalizer",
+      "name": "Equalizer",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#equalizer-equalizer",
+      "origin": "upstream",
+      "summary": "Adds BiquadFilter nodes (bass-booster preset plus custom config filters) in parallel to the shared audio graph.",
+      "source": [
+        "src/plugins/equalizer/index.ts",
+        "src/plugins/equalizer/presets.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.equalizer.enabled",
+        "plugins.equalizer.filters",
+        "plugins.equalizer.presets"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "exponential-volume",
+      "name": "Exponential Volume",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#exponential-volume-exponential-volume",
+      "origin": "upstream",
+      "summary": "Patches HTMLMediaElement.prototype.volume to a cubic curve so low volumes are easier to select.",
+      "source": [
+        "src/plugins/exponential-volume/index.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.exponential-volume.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "precise-volume",
+      "name": "Precise Volume",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#precise-volume-precise-volume",
+      "origin": "upstream",
+      "summary": "Step-based volume via wheel/arrow keys/global shortcuts with a HUD, persisting the volume across sessions.",
+      "source": [
+        "src/plugins/precise-volume/index.ts",
+        "src/plugins/precise-volume/renderer.ts",
+        "src/plugins/precise-volume/override.ts",
+        "src/plugins/precise-volume/volume-hud.css"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu",
+        "stylesheets"
+      ],
+      "configKeys": [
+        "plugins.precise-volume.enabled",
+        "plugins.precise-volume.steps",
+        "plugins.precise-volume.arrowsShortcut",
+        "plugins.precise-volume.globalShortcuts.volumeUp",
+        "plugins.precise-volume.globalShortcuts.volumeDown",
+        "plugins.precise-volume.savedVolume"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "changeVolume",
+        "setVolume"
+      ],
+      "domAnchors": [
+        "ytmusic-player-bar",
+        "#volume-slider",
+        "#expand-volume-slider",
+        "tp-yt-paper-icon-button.volume",
+        "#expand-volume",
+        "#main-panel",
+        "#song-video",
+        ".center-content.ytmusic-nav-bar",
+        "ytmusic-player",
+        "video",
+        "ytmusic-search-box",
+        "#volumeHud"
+      ],
+      "newPlayerBarStatus": "partially affected: setupPlaybar returns early (renderer.ts:134, no ytmusic-player-bar) so bar wheel and the #volume-slider observer are gone; manual slider drags are not saved to savedVolume (stale value restored on next launch); slider sync/tooltips no-op. Arrow keys, global shortcuts, mpris, #main-panel wheel and HUD still work",
+      "userEnabled": null
+    },
+    {
+      "id": "playback-speed",
+      "name": "Playback Speed",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#playback-speed-playback-speed",
+      "origin": "upstream",
+      "summary": "Injects a 0.07x-16x speed slider into the player-bar song menu and enforces the rate on every track.",
+      "source": [
+        "src/plugins/playback-speed/index.ts",
+        "src/plugins/playback-speed/renderer.tsx",
+        "src/plugins/playback-speed/components/slider.tsx",
+        "src/providers/dom-elements.ts",
+        "src/plugins/utils/renderer/check.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.playback-speed.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "ytmusic-popup-container",
+        "ytmusic-menu-popup-renderer tp-yt-paper-listbox",
+        "tp-yt-paper-listbox #navigation-endpoint",
+        "ytmusic-menu-renderer.ytmusic-player-bar",
+        "video"
+      ],
+      "newPlayerBarStatus": "likely broken: isPlayerMenu (plugins/utils/renderer/check.ts:55) requires 'ytmusic-menu-renderer.ytmusic-player-bar', so the speed slider is never injected into the song menu; speed stays 1",
+      "userEnabled": null
+    },
+    {
+      "id": "quality-changer",
+      "name": "Video Quality Changer",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#video-quality-changer-quality-changer",
+      "origin": "upstream",
+      "summary": "Adds a gear button to the video overlay that opens a native dialog to pick the playback quality.",
+      "source": [
+        "src/plugins/quality-changer/index.tsx",
+        "src/plugins/quality-changer/templates/quality-setting-button.tsx"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.quality-changer.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "peard:quality-changer"
+      ],
+      "domAnchors": [
+        ".top-row-buttons.ytmusic-player"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "skip-silences",
+      "name": "Skip Silences",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#skip-silences-skip-silences",
+      "origin": "upstream",
+      "summary": "AnalyserNode-based silence detection that seeks forward 0.2 s while silent (optionally only at track start).",
+      "source": [
+        "src/plugins/skip-silences/index.ts",
+        "src/plugins/skip-silences/renderer.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.skip-silences.enabled",
+        "plugins.skip-silences.onlySkipBeginning"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [
+        "video"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "custom-output-device",
+      "name": "Custom Output Device",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#custom-output-device-custom-output-device",
+      "origin": "upstream",
+      "summary": "Routes the shared AudioContext to a chosen audio output via AudioContext.setSinkId.",
+      "source": [
+        "src/plugins/custom-output-device/index.ts",
+        "src/plugins/custom-output-device/renderer.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.custom-output-device.enabled",
+        "plugins.custom-output-device.output",
+        "plugins.custom-output-device.devices"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "visualizer",
+      "name": "Visualizer",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#visualizer-visualizer",
+      "origin": "upstream",
+      "summary": "Butterchurn/Vudio/Wave audio visualizer drawn on a canvas inside #player.",
+      "source": [
+        "src/plugins/visualizer/index.ts",
+        "src/plugins/visualizer/empty-player.css",
+        "src/plugins/visualizer/visualizers/index.ts",
+        "src/plugins/visualizer/visualizers/visualizer.ts",
+        "src/plugins/visualizer/visualizers/butterchurn.ts",
+        "src/plugins/visualizer/visualizers/vudio.ts",
+        "src/plugins/visualizer/visualizers/wave.ts",
+        "src/plugins/visualizer/butterchurn.d.ts",
+        "src/plugins/visualizer/vudio.d.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu",
+        "stylesheets"
+      ],
+      "configKeys": [
+        "plugins.visualizer.enabled",
+        "plugins.visualizer.type",
+        "plugins.visualizer.butterchurn.preset",
+        "plugins.visualizer.butterchurn.blendTimeInSeconds",
+        "plugins.visualizer.vudio.effect",
+        "plugins.visualizer.vudio.accuracy",
+        "plugins.visualizer.vudio.lighting",
+        "plugins.visualizer.wave.animations"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#player",
+        "video",
+        "canvas#visualizer"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "disable-autoplay",
+      "name": "Disable Autoplay",
+      "domain": "playback-audio",
+      "doc": "docs/plugins/playback-audio.md#disable-autoplay-disable-autoplay",
+      "origin": "upstream",
+      "summary": "Pauses each newly loaded track on 'dataloaded' (optionally only the first one after launch).",
+      "source": [
+        "src/plugins/disable-autoplay/index.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.disable-autoplay.enabled",
+        "plugins.disable-autoplay.applyOnce"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "video"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "album-color-theme",
+      "name": "Album Color Theme",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#album-color-theme-album-color-theme",
+      "origin": "upstream",
+      "summary": "Mixes the current thumbnail's average colour into YTM's dark-theme CSS variables; optional themed seek bar.",
+      "source": [
+        "src/plugins/album-color-theme/index.ts",
+        "src/plugins/album-color-theme/style.css"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.album-color-theme.enabled",
+        "plugins.album-color-theme.ratio",
+        "plugins.album-color-theme.enableSeekbar"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "html (style vars)",
+        "body.seekbar-theme",
+        "#player-page",
+        "#nav-bar-background",
+        "#player-bar-background",
+        "#guide-wrapper",
+        "#mini-guide-background",
+        "#layout",
+        "ytmusic-player-bar",
+        ".menu.ytmusic-player-bar",
+        ".time-info.ytmusic-player-bar",
+        ".volume-slider.ytmusic-player-bar",
+        ".expand-volume-slider.ytmusic-player-bar",
+        "#progress-bar.ytmusic-player-bar",
+        "ytmusic-app-layout > [slot=\"player-page\"]",
+        "yt-page-navigation-progress",
+        "ytmusic-fullbleed-thumbnail-renderer img",
+        "ytmusic-search-box"
+      ],
+      "newPlayerBarStatus": "partially affected: enableSeekbar gradient targets dead '.seekbar-theme #progress-bar.ytmusic-player-bar' (style.css:89) and the player-bar colour fixes (.menu/.time-info/.volume-slider.ytmusic-player-bar, ytmusic-player-bar; style.css:51-65) are dead; the main CSS-variable theme is unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "ambient-mode",
+      "name": "Ambient Mode",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#ambient-mode-ambient-mode",
+      "origin": "upstream",
+      "summary": "Blurred canvas/image glow of the current video or cover behind the player on the player page.",
+      "source": [
+        "src/plugins/ambient-mode/index.ts",
+        "src/plugins/ambient-mode/menu.ts",
+        "src/plugins/ambient-mode/style.css",
+        "src/plugins/ambient-mode/types.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.ambient-mode.enabled",
+        "plugins.ambient-mode.quality",
+        "plugins.ambient-mode.buffer",
+        "plugins.ambient-mode.interpolationTime",
+        "plugins.ambient-mode.blur",
+        "plugins.ambient-mode.size",
+        "plugins.ambient-mode.opacity",
+        "plugins.ambient-mode.fullscreen"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#song-image",
+        "#song-image yt-img-shadow > img",
+        "#song-video",
+        "#song-video > .player-wrapper",
+        ".html5-video-container > video",
+        "#player-page",
+        "#layout[player-page-open]",
+        "#player",
+        ".song-button.ytmusic-av-toggle",
+        ".video-button.ytmusic-av-toggle",
+        "#side-panel.side-panel.ytmusic-player-page"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "blur-nav-bar",
+      "name": "Blur Navigation Bar",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#blur-navigation-bar-blur-nav-bar",
+      "origin": "upstream",
+      "summary": "Translucent black, 8px-blurred nav bar and sticky tabs; hides the nav divider.",
+      "source": [
+        "src/plugins/blur-nav-bar/index.ts",
+        "src/plugins/blur-nav-bar/style.css"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.blur-nav-bar.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#nav-bar-background",
+        "#header.ytmusic-item-section-renderer",
+        "ytmusic-tabs",
+        "ytmusic-tabs.stuck",
+        "#nav-bar-divider"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "compact-sidebar",
+      "name": "Compact Sidebar",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#compact-sidebar-compact-sidebar",
+      "origin": "upstream",
+      "summary": "Clicks the guide hamburger so the left sidebar stays in compact (mini-guide) mode.",
+      "source": [
+        "src/plugins/compact-sidebar/index.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.compact-sidebar.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#mini-guide",
+        "#button"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "clock",
+      "name": "Clock",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#clock-clock",
+      "origin": "upstream",
+      "summary": "Clock centred in the nav bar, optional seconds and 12/24h format.",
+      "source": [
+        "src/plugins/clock/index.tsx",
+        "src/plugins/clock/style.css",
+        "src/plugins/clock/types.ts"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.clock.enabled",
+        "plugins.clock.displaySeconds",
+        "plugins.clock.hour12"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        ".center-content"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "transparent-player",
+      "name": "Transparent Player",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#transparent-player-transparent-player",
+      "origin": "upstream",
+      "summary": "Windows-only: Mica/Acrylic/Tabbed window material plus semi-transparent, blurred page backgrounds.",
+      "source": [
+        "src/plugins/transparent-player/index.ts",
+        "src/plugins/transparent-player/style.css",
+        "src/plugins/transparent-player/types.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.transparent-player.enabled",
+        "plugins.transparent-player.opacity",
+        "plugins.transparent-player.type"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [
+        "body",
+        "#layout #nav-bar-background",
+        "#layout #player-bar-background",
+        "ytmusic-app-layout[player-page-open]",
+        "#mini-guide-background",
+        "#guide #guide-wrapper",
+        "ytmusic-player-bar",
+        "#player-page",
+        "#search-page #tabs.stuck",
+        "#browse-page #background",
+        "ytmusic-menu-popup-renderer",
+        "#ytmd-title-bar-main-panel",
+        "nav[data-ytmd-main-panel]",
+        ".av-toggle.ytmusic-av-toggle"
+      ],
+      "newPlayerBarStatus": "partially affected: '#layout ytmusic-player-bar { background: none }' (style.css:69) is dead, so the new ytmusic-miniplayer keeps its own background; #player-bar-background existence unverified; window material and other page rules unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "unobtrusive-player",
+      "name": "Unobtrusive Player",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#unobtrusive-player-unobtrusive-player",
+      "origin": "upstream",
+      "summary": "Hides/auto-closes the player page when a song is started from a list or Shuffle play.",
+      "source": [
+        "src/plugins/unobtrusive-player/index.ts",
+        "src/plugins/unobtrusive-player/style.css"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.unobtrusive-player.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "ytmusic-player-bar",
+        "ytmusic-play-button-renderer",
+        "ytmusic-player-page",
+        "iron-iconset-svg[name=\"yt-sys-icons\"] #shuffle",
+        "ytmusic-menu-navigation-item-renderer",
+        "ytmusic-app-layout[player-ui-state]",
+        ".toggle-player-page-button",
+        "#content",
+        "#nav-bar-background",
+        "#nav-bar-divider",
+        "#mini-guide-background"
+      ],
+      "newPlayerBarStatus": "likely broken: e.target.closest('ytmusic-player-bar') (index.ts:11) never matches, so clicking the bar no longer clears unobtrusive-player--did-play; the player page stays visibility:hidden and keeps auto-closing on track change; .toggle-player-page-button unverified",
+      "userEnabled": null
+    },
+    {
+      "id": "picture-in-picture",
+      "name": "Picture-in-picture",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#picture-in-picture-picture-in-picture",
+      "origin": "upstream",
+      "summary": "Native video PiP or a shrunk always-on-top window-PiP, via hotkey, song-menu entry, or minimize button.",
+      "source": [
+        "src/plugins/picture-in-picture/index.ts",
+        "src/plugins/picture-in-picture/main.ts",
+        "src/plugins/picture-in-picture/renderer.tsx",
+        "src/plugins/picture-in-picture/menu.ts",
+        "src/plugins/picture-in-picture/style.css",
+        "src/plugins/picture-in-picture/templates/picture-in-picture-button.tsx",
+        "src/plugins/picture-in-picture/keyboardevent-from-electron-accelerator.d.ts",
+        "src/plugins/picture-in-picture/keyboardevents-areequal.d.ts",
+        "src/plugins/utils/renderer/check.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.picture-in-picture.enabled",
+        "plugins.picture-in-picture.alwaysOnTop",
+        "plugins.picture-in-picture.savePosition",
+        "plugins.picture-in-picture.saveSize",
+        "plugins.picture-in-picture.hotkey",
+        "plugins.picture-in-picture.pip-position",
+        "plugins.picture-in-picture.pip-size",
+        "plugins.picture-in-picture.isInPiP",
+        "plugins.picture-in-picture.useNativePiP"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "plugin:toggle-picture-in-picture",
+        "peard:pip-toggle"
+      ],
+      "domAnchors": [
+        "video",
+        "#icon",
+        "ytmusic-search-box",
+        ".exit-fullscreen-button",
+        ".player-minimize-button",
+        "ytmusic-app-layout",
+        "#expanding-menu",
+        ".middle-controls",
+        "ytmusic-player-page",
+        ".toggle-player-page-button",
+        ".fullscreen-button",
+        "#player",
+        "nav[data-ytmd-main-panel]",
+        "ytmusic-popup-container",
+        "ytmusic-menu-popup-renderer tp-yt-paper-listbox",
+        "tp-yt-paper-listbox #navigation-endpoint",
+        "ytmusic-menu-renderer.ytmusic-player-bar",
+        "ytmusic-player-bar",
+        "ytmusic-player-expanding-menu",
+        "#volumeHud",
+        ".cet-container",
+        ".video-switch-button"
+      ],
+      "newPlayerBarStatus": "likely broken (partly): song-menu PiP entry never injected because isPlayerMenu (check.ts:54-56) requires 'ytmusic-menu-renderer.ytmusic-player-bar'; '.middle-controls' (renderer.tsx:67) and all ytmusic-player-bar PiP-mode CSS are dead; .fullscreen-button/#expanding-menu/.toggle-player-page-button unverified; hotkey + native PiP (default) unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "video-toggle",
+      "name": "Video Toggle",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#video-toggle-video-toggle",
+      "origin": "upstream",
+      "summary": "Custom Song/Video switch over the player (or native/disabled AV toggle), optional force-hide of the video panel.",
+      "source": [
+        "src/plugins/video-toggle/index.tsx",
+        "src/plugins/video-toggle/templates/video-switch-button.tsx",
+        "src/plugins/video-toggle/button-switcher.css",
+        "src/plugins/video-toggle/force-hide.css"
+      ],
+      "entryPoints": [
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.video-toggle.enabled",
+        "plugins.video-toggle.hideVideo",
+        "plugins.video-toggle.mode",
+        "plugins.video-toggle.forceHide",
+        "plugins.video-toggle.align"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [
+        "ytmusic-player-page",
+        "ytmusic-player",
+        "ytmusic-av-toggle",
+        "video",
+        "#player",
+        "#song-video.ytmusic-player",
+        "#song-image",
+        "#song-image #img.style-scope.yt-img-shadow",
+        ".video-switch-button-checkbox",
+        "#main-panel",
+        ".side-panel.ytmusic-player-page",
+        "#av-id"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "in-app-menu",
+      "name": "In-App Menu",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#in-app-menu-in-app-menu",
+      "origin": "upstream",
+      "summary": "Frameless window with a custom HTML title bar rendering the app menu (and window controls on Linux).",
+      "source": [
+        "src/plugins/in-app-menu/index.ts",
+        "src/plugins/in-app-menu/constants.ts",
+        "src/plugins/in-app-menu/main.ts",
+        "src/plugins/in-app-menu/menu.ts",
+        "src/plugins/in-app-menu/renderer.tsx",
+        "src/plugins/in-app-menu/titlebar.css",
+        "src/plugins/in-app-menu/renderer/TitleBar.tsx",
+        "src/plugins/in-app-menu/renderer/Panel.tsx",
+        "src/plugins/in-app-menu/renderer/PanelItem.tsx",
+        "src/plugins/in-app-menu/renderer/MenuButton.tsx",
+        "src/plugins/in-app-menu/renderer/IconButton.tsx",
+        "src/plugins/in-app-menu/renderer/WindowController.tsx"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.in-app-menu.enabled",
+        "plugins.in-app-menu.hideDOMWindowControls"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "get-menu",
+        "get-menu-by-id",
+        "peard:menu-event",
+        "window-is-maximized",
+        "window-close",
+        "window-minimize",
+        "window-maximize",
+        "window-unmaximize",
+        "image-path-to-data-url",
+        "close-all-in-app-menu-panel",
+        "toggle-in-app-menu",
+        "refresh-in-app-menu"
+      ],
+      "domAnchors": [
+        "document.body",
+        "#layout",
+        "nav[data-ytmd-main-panel]",
+        "ul[data-ytmd-sub-panel]",
+        "ytmusic-app-layout > #content",
+        "ytmusic-app-layout > [slot='nav-bar']",
+        "ytmusic-app-layout > [slot='player-page']",
+        "#nav-bar-background",
+        "#nav-bar-divider",
+        "#guide-spacer",
+        "#mini-guide-spacer",
+        "ytmusic-guide-renderer",
+        "ytmusic-player[player-ui-state='FULLSCREEN']"
+      ],
+      "newPlayerBarStatus": "unaffected (caveat: titlebar.css:61 uses var(--ytmusic-player-bar-height) and :73 var(--ytmusic-player-page-player-bar-height), both unverified; if gone, the player-page height / mini-player transform calc() becomes invalid)",
+      "userEnabled": null
+    },
+    {
+      "id": "navigation",
+      "name": "Navigation",
+      "domain": "appearance-ui",
+      "doc": "docs/plugins/appearance-ui.md#navigation-navigation",
+      "origin": "upstream",
+      "summary": "Back/forward arrow buttons (history.back/forward) prepended to the nav bar's right content.",
+      "source": [
+        "src/plugins/navigation/index.tsx"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.navigation.enabled"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#right-content"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "api-server",
+      "name": "API Server [Beta]",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#api-server-beta-api-server",
+      "origin": "upstream",
+      "summary": "Local HTTP(S) REST + WebSocket API (Hono, JWT auth with first-use approval dialog) to control and observe the player, with OpenAPI/Swagger docs.",
+      "source": [
+        "src/plugins/api-server/index.ts",
+        "src/plugins/api-server/config.ts",
+        "src/plugins/api-server/menu.ts",
+        "src/plugins/api-server/backend/index.ts",
+        "src/plugins/api-server/backend/main.ts",
+        "src/plugins/api-server/backend/types.ts",
+        "src/plugins/api-server/backend/api-version.ts",
+        "src/plugins/api-server/backend/routes/index.ts",
+        "src/plugins/api-server/backend/routes/control.ts",
+        "src/plugins/api-server/backend/routes/auth.ts",
+        "src/plugins/api-server/backend/routes/websocket.ts",
+        "src/plugins/api-server/backend/scheme/index.ts",
+        "src/plugins/api-server/backend/scheme/auth.ts",
+        "src/plugins/api-server/backend/scheme/go-back.ts",
+        "src/plugins/api-server/backend/scheme/go-forward.ts",
+        "src/plugins/api-server/backend/scheme/queue.ts",
+        "src/plugins/api-server/backend/scheme/search.ts",
+        "src/plugins/api-server/backend/scheme/seek.ts",
+        "src/plugins/api-server/backend/scheme/set-fullscreen.ts",
+        "src/plugins/api-server/backend/scheme/set-volume.ts",
+        "src/plugins/api-server/backend/scheme/song-info.ts",
+        "src/plugins/api-server/backend/scheme/switch-repeat.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.api-server.enabled",
+        "plugins.api-server.hostname",
+        "plugins.api-server.port",
+        "plugins.api-server.authStrategy",
+        "plugins.api-server.secret",
+        "plugins.api-server.authorizedClients",
+        "plugins.api-server.useHttps",
+        "plugins.api-server.certPath",
+        "plugins.api-server.keyPath"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "peard:player-api-loaded",
+        "peard:setup-seeked-listener",
+        "peard:setup-time-changed-listener",
+        "peard:setup-repeat-changed-listener",
+        "peard:setup-like-changed-listener",
+        "peard:setup-volume-changed-listener",
+        "peard:setup-shuffle-changed-listener",
+        "peard:repeat-changed",
+        "peard:volume-changed",
+        "peard:seeked",
+        "peard:shuffle-changed",
+        "peard:get-shuffle",
+        "peard:get-shuffle-response",
+        "peard:get-fullscreen",
+        "peard:set-fullscreen",
+        "peard:click-fullscreen-button",
+        "peard:get-queue",
+        "peard:get-queue-response",
+        "peard:search",
+        "peard:search-results",
+        "peard:previous-video",
+        "peard:next-video",
+        "peard:play",
+        "peard:pause",
+        "peard:toggle-play",
+        "peard:update-like",
+        "peard:seek-to",
+        "peard:seek-by",
+        "peard:shuffle",
+        "peard:switch-repeat",
+        "peard:update-volume",
+        "peard:toggle-mute",
+        "peard:add-to-queue",
+        "peard:move-in-queue",
+        "peard:remove-from-queue",
+        "peard:set-queue-index",
+        "peard:clear-queue",
+        "peard:video-src-changed",
+        "peard:play-or-paused",
+        "peard:time-changed"
+      ],
+      "domAnchors": [
+        "#like-button-renderer"
+      ],
+      "newPlayerBarStatus": "partially affected: GET /api/v1/like-state reads document.querySelector('#like-button-renderer')?.likeStatus via executeJavaScript (backend/main.ts:134-136) and now always returns {state:null}; all other endpoints and WebSocket messages go through the fixed IPC paths",
+      "userEnabled": null
+    },
+    {
+      "id": "discord",
+      "name": "Discord Rich Presence",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#discord-rich-presence-discord",
+      "origin": "upstream",
+      "summary": "Shows the current song as a Discord 'Listening' activity over local Discord RPC (@xhayper/discord-rpc), with throttling, auto-reconnect and pause timeout.",
+      "source": [
+        "src/plugins/discord/index.ts",
+        "src/plugins/discord/main.ts",
+        "src/plugins/discord/discord-service.ts",
+        "src/plugins/discord/menu.ts",
+        "src/plugins/discord/constants.ts",
+        "src/plugins/discord/timer-manager.ts",
+        "src/plugins/discord/utils.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.discord.enabled",
+        "plugins.discord.autoReconnect",
+        "plugins.discord.activityTimeoutEnabled",
+        "plugins.discord.activityTimeoutTime",
+        "plugins.discord.playOnYouTubeMusic",
+        "plugins.discord.hideGitHubButton",
+        "plugins.discord.hideDurationLeft",
+        "plugins.discord.statusDisplayType"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "peard:player-api-loaded",
+        "peard:setup-time-changed-listener",
+        "peard:video-src-changed",
+        "peard:play-or-paused",
+        "peard:time-changed"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "scrobbler",
+      "name": "Scrobbler",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#scrobbler-scrobbler",
+      "origin": "upstream",
+      "summary": "Sends now-playing and scrobbles (at min(half duration, 4 min)) to Last.fm (signed API + browser auth window) and/or ListenBrainz (user token).",
+      "source": [
+        "src/plugins/scrobbler/index.ts",
+        "src/plugins/scrobbler/main.ts",
+        "src/plugins/scrobbler/menu.ts",
+        "src/plugins/scrobbler/services/base.ts",
+        "src/plugins/scrobbler/services/lastfm.ts",
+        "src/plugins/scrobbler/services/listenbrainz.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.scrobbler.enabled",
+        "plugins.scrobbler.scrobbleOtherMedia",
+        "plugins.scrobbler.alternativeTitles",
+        "plugins.scrobbler.alternativeArtist",
+        "plugins.scrobbler.scrobblers.lastfm.enabled",
+        "plugins.scrobbler.scrobblers.lastfm.token",
+        "plugins.scrobbler.scrobblers.lastfm.sessionKey",
+        "plugins.scrobbler.scrobblers.lastfm.apiRoot",
+        "plugins.scrobbler.scrobblers.lastfm.apiKey",
+        "plugins.scrobbler.scrobblers.lastfm.secret",
+        "plugins.scrobbler.scrobblers.listenbrainz.enabled",
+        "plugins.scrobbler.scrobblers.listenbrainz.token",
+        "plugins.scrobbler.scrobblers.listenbrainz.apiRoot"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:video-src-changed",
+        "peard:play-or-paused"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "lumiastream",
+      "name": "Lumia Stream [Beta]",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#lumia-stream-beta-lumiastream",
+      "origin": "upstream",
+      "summary": "POSTs song state on every song-info event to the local Lumia Stream app at http://127.0.0.1:39231/api/media with a hardcoded token.",
+      "source": [
+        "src/plugins/lumiastream/index.ts"
+      ],
+      "entryPoints": [
+        "backend"
+      ],
+      "configKeys": [
+        "plugins.lumiastream.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:player-api-loaded",
+        "peard:setup-time-changed-listener",
+        "peard:video-src-changed",
+        "peard:play-or-paused",
+        "peard:time-changed"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "tuna-obs",
+      "name": "Tuna OBS",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#tuna-obs-tuna-obs",
+      "origin": "upstream",
+      "summary": "POSTs song state to the OBS Tuna plugin web server at http://127.0.0.1:1608/, falling back to OPTIONS probes (lite mode) while it is unreachable.",
+      "source": [
+        "src/plugins/tuna-obs/index.ts"
+      ],
+      "entryPoints": [
+        "backend"
+      ],
+      "configKeys": [
+        "plugins.tuna-obs.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:player-api-loaded",
+        "peard:setup-time-changed-listener",
+        "peard:video-src-changed",
+        "peard:play-or-paused",
+        "peard:time-changed"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "music-together",
+      "name": "Music Together [Beta]",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#music-together-beta-music-together",
+      "origin": "upstream",
+      "summary": "Peer-to-peer (PeerJS/WebRTC) shared listening: host/guest sessions that sync the queue via #queue store dispatch injection and push playback progress, with host-controlled permissions.",
+      "source": [
+        "src/plugins/music-together/index.ts",
+        "src/plugins/music-together/connection.ts",
+        "src/plugins/music-together/types.ts",
+        "src/plugins/music-together/element.ts",
+        "src/plugins/music-together/queue/index.ts",
+        "src/plugins/music-together/queue/queue.ts",
+        "src/plugins/music-together/queue/song.ts",
+        "src/plugins/music-together/queue/utils.ts",
+        "src/plugins/music-together/queue/client.ts",
+        "src/plugins/music-together/queue/sha1hash.ts",
+        "src/plugins/music-together/ui/host.ts",
+        "src/plugins/music-together/ui/guest.ts",
+        "src/plugins/music-together/ui/setting.ts",
+        "src/plugins/music-together/ui/status.ts",
+        "src/plugins/music-together/templates/item.html",
+        "src/plugins/music-together/templates/popup.html",
+        "src/plugins/music-together/templates/setting.html",
+        "src/plugins/music-together/templates/status.html",
+        "src/plugins/music-together/style.css"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "stylesheets"
+      ],
+      "configKeys": [
+        "plugins.music-together.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "music-together:prompt"
+      ],
+      "domAnchors": [
+        "#right-content > ytmusic-settings-button",
+        "#right-content > ytmusic-settings-button *:where(tp-yt-paper-icon-button,yt-icon-button,.ytmusic-settings-button)",
+        "ytd-active-account-header-renderer",
+        "ytmusic-settings-button > tp-yt-paper-icon-button > tp-yt-iron-icon#icon img",
+        "tp-yt-paper-progress",
+        "#queue",
+        "ytmusic-app",
+        "#contents > ytmusic-player-queue-item",
+        "#contents > ytmusic-playlist-panel-video-wrapper-renderer > #primary-renderer > ytmusic-player-queue-item",
+        "ytmusic-player-queue-item"
+      ],
+      "newPlayerBarStatus": "partially affected: guest seek broadcast (permission 'all') patches _update on tp-yt-paper-progress (old #progress-bar internals, index.ts:596-626); the new bar uses input.ytMusicMiniPlayerProgressBar, so guest-initiated seeks likely stop syncing silently. Host->guest progress/state/index sync, queue sync (#queue store, ytmusic-app.networkManager) and guest play/pause (onStateChange) are unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "amuse",
+      "name": "Amuse",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#amuse-amuse",
+      "origin": "upstream",
+      "summary": "Serves current song info as JSON on port 9863 (/query and /api) for the Amuse now-playing widget by 6K Labs.",
+      "source": [
+        "src/plugins/amuse/index.ts",
+        "src/plugins/amuse/backend.ts",
+        "src/plugins/amuse/types.ts"
+      ],
+      "entryPoints": [
+        "backend"
+      ],
+      "configKeys": [
+        "plugins.amuse.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:video-src-changed",
+        "peard:play-or-paused",
+        "peard:time-changed"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "auth-proxy-adapter",
+      "name": "Auth Proxy Adapter",
+      "domain": "integrations",
+      "doc": "docs/plugins/integrations.md#auth-proxy-adapter-auth-proxy-adapter",
+      "origin": "upstream",
+      "summary": "Local no-auth SOCKS5 server (default 127.0.0.1:4545) that relays CONNECTs through the authenticated upstream proxy in options.proxy; src/index.ts points Chromium's --proxy-server at it.",
+      "source": [
+        "src/plugins/auth-proxy-adapter/index.ts",
+        "src/plugins/auth-proxy-adapter/config.ts",
+        "src/plugins/auth-proxy-adapter/menu.ts",
+        "src/plugins/auth-proxy-adapter/backend/index.ts",
+        "src/plugins/auth-proxy-adapter/backend/types.ts",
+        "src/index.ts"
+      ],
+      "entryPoints": [
+        "backend",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.auth-proxy-adapter.enabled",
+        "plugins.auth-proxy-adapter.hostname",
+        "plugins.auth-proxy-adapter.port",
+        "options.proxy"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "downloader",
+      "name": "Downloader",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#downloader-downloader",
+      "origin": "upstream",
+      "summary": "Downloads the current/selected song or a whole playlist via youtubei.js + ffmpeg.wasm (mp3 256k / source / custom preset, ID3 + cover), with optional auto-download after listening.",
+      "source": [
+        "src/plugins/downloader/index.ts",
+        "src/plugins/downloader/main/index.ts",
+        "src/plugins/downloader/main/utils.ts",
+        "src/plugins/downloader/menu.ts",
+        "src/plugins/downloader/renderer.tsx",
+        "src/plugins/downloader/templates/download.tsx",
+        "src/plugins/downloader/types.ts",
+        "src/plugins/downloader/style.css"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.downloader.enabled",
+        "plugins.downloader.downloadFolder",
+        "plugins.downloader.downloadOnFinish.enabled",
+        "plugins.downloader.downloadOnFinish.mode",
+        "plugins.downloader.downloadOnFinish.seconds",
+        "plugins.downloader.downloadOnFinish.percent",
+        "plugins.downloader.downloadOnFinish.folder",
+        "plugins.downloader.selectedPreset",
+        "plugins.downloader.customPresetSetting",
+        "plugins.downloader.skipExisting",
+        "plugins.downloader.playlistMaxItems"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "download-song",
+        "download-playlist-request",
+        "downloader-feedback",
+        "peard:video-src-changed",
+        "peard:player-api-loaded",
+        "peard:setup-time-changed-listener"
+      ],
+      "domAnchors": [
+        "ytmusic-popup-container",
+        "ytmusic-menu-popup-renderer tp-yt-paper-listbox",
+        "tp-yt-paper-listbox #navigation-endpoint",
+        "ytmusic-menu-navigation-item-renderer[tabindex=\"0\"] #navigation-endpoint",
+        "ytmusic-menu-navigation-item-renderer[tabindex=\"-1\"] #navigation-endpoint",
+        "iron-iconset-svg[name=\"yt-sys-icons\"] #youtube_music_monochrome",
+        "ytmusic-guide-entry-renderer"
+      ],
+      "newPlayerBarStatus": "partially affected: whether the new bar's MORE button opens the ytmusic-menu-popup-renderer popup the Download entry is injected into is unverified (song-row menus elsewhere unaffected); download-on-finish needs peard:time-changed, which at HEAD only came from the dead #progress-bar, so it effectively never fires except seconds mode on tracks shorter than the threshold (the uncommitted working-tree song-info-front.ts adds a <video> timeupdate fallback)",
+      "userEnabled": null
+    },
+    {
+      "id": "synced-lyrics",
+      "name": "Synced Lyrics",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#synced-lyrics-synced-lyrics",
+      "origin": "upstream",
+      "summary": "Takes over the Lyrics tab with time-synced or plain lyrics from YTMusic, LRCLib, MusixMatch and LyricsGenius (provider picker, star per video, romanization, line effects).",
+      "source": [
+        "src/plugins/synced-lyrics/index.ts",
+        "src/plugins/synced-lyrics/backend.ts",
+        "src/plugins/synced-lyrics/menu.ts",
+        "src/plugins/synced-lyrics/types.ts",
+        "src/plugins/synced-lyrics/style.css",
+        "src/plugins/synced-lyrics/parsers/lrc.ts",
+        "src/plugins/synced-lyrics/parsers/lrc.test.ts",
+        "src/plugins/synced-lyrics/providers/index.ts",
+        "src/plugins/synced-lyrics/providers/renderer.ts",
+        "src/plugins/synced-lyrics/providers/YTMusic.ts",
+        "src/plugins/synced-lyrics/providers/LRCLib.ts",
+        "src/plugins/synced-lyrics/providers/MusixMatch.ts",
+        "src/plugins/synced-lyrics/providers/LyricsGenius.ts",
+        "src/plugins/synced-lyrics/providers/Megalobiz.ts",
+        "src/plugins/synced-lyrics/renderer/index.ts",
+        "src/plugins/synced-lyrics/renderer/store.ts",
+        "src/plugins/synced-lyrics/renderer/renderer.tsx",
+        "src/plugins/synced-lyrics/renderer/utils.tsx",
+        "src/plugins/synced-lyrics/renderer/components/index.ts",
+        "src/plugins/synced-lyrics/renderer/components/LyricsPicker.tsx",
+        "src/plugins/synced-lyrics/renderer/components/SyncedLine.tsx",
+        "src/plugins/synced-lyrics/renderer/components/PlainLyrics.tsx",
+        "src/plugins/synced-lyrics/renderer/components/ErrorDisplay.tsx",
+        "src/plugins/synced-lyrics/renderer/components/LoadingKaomoji.tsx",
+        "src/plugins/synced-lyrics/renderer/components/NotFoundKaomoji.tsx"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.synced-lyrics.enabled",
+        "plugins.synced-lyrics.preferredProvider",
+        "plugins.synced-lyrics.preciseTiming",
+        "plugins.synced-lyrics.showLyricsEvenIfInexact",
+        "plugins.synced-lyrics.showTimeCodes",
+        "plugins.synced-lyrics.defaultTextString",
+        "plugins.synced-lyrics.lineEffect",
+        "plugins.synced-lyrics.romanization",
+        "plugins.synced-lyrics.convertChineseCharacter"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "synced-lyrics:fetch",
+        "peard:update-song-info"
+      ],
+      "domAnchors": [
+        "#tabsContent > .tab-header:nth-of-type(2)",
+        "#tab-renderer[page-type=\"MUSIC_PAGE_TYPE_TRACK_LYRICS\"]",
+        "ytmusic-app",
+        "#synced-lyrics-container",
+        ".synced-lyrics-vlist"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "captions-selector",
+      "name": "Captions Selector",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#captions-selector-captions-selector",
+      "origin": "upstream",
+      "summary": "Player-bar button that opens a prompt to choose a caption track; optionally autoloads the last language or disables captions.",
+      "source": [
+        "src/plugins/captions-selector/index.ts",
+        "src/plugins/captions-selector/back.ts",
+        "src/plugins/captions-selector/renderer.tsx",
+        "src/plugins/captions-selector/templates/captions-settings-template.tsx"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.captions-selector.enabled",
+        "plugins.captions-selector.disableCaptions",
+        "plugins.captions-selector.autoload",
+        "plugins.captions-selector.lastCaptionsCode"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [
+        "peard:captions-selector"
+      ],
+      "domAnchors": [
+        ".right-controls-buttons",
+        "video",
+        "ytmusic-app"
+      ],
+      "newPlayerBarStatus": "likely broken: the button mounts into .right-controls-buttons (old ytmusic-player-bar #right-controls), which is gone, so onPlayerApiReady fails before reading the tracklist or attaching the peard:src-changed listener; no button, and autoload/disableCaptions are dead too",
+      "userEnabled": null
+    },
+    {
+      "id": "sponsorblock",
+      "name": "SponsorBlock",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#sponsorblock-sponsorblock",
+      "origin": "upstream",
+      "summary": "Fetches SponsorBlock segments per video in main and seeks the <video> past them on timeupdate.",
+      "source": [
+        "src/plugins/sponsorblock/index.ts",
+        "src/plugins/sponsorblock/segments.ts",
+        "src/plugins/sponsorblock/types.ts",
+        "src/plugins/sponsorblock/tests/segments.test.js"
+      ],
+      "entryPoints": [
+        "backend",
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.sponsorblock.enabled",
+        "plugins.sponsorblock.apiURL",
+        "plugins.sponsorblock.categories"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:video-src-changed",
+        "sponsorblock-skip"
+      ],
+      "domAnchors": [
+        "video"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "skip-disliked-songs",
+      "name": "Skip Disliked Songs",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#skip-disliked-songs-skip-disliked-songs",
+      "origin": "upstream",
+      "summary": "Clicks Next when the current song's like-status becomes DISLIKE.",
+      "source": [
+        "src/plugins/skip-disliked-songs/index.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.skip-disliked-songs.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#like-button-renderer",
+        "yt-icon-button.next-button"
+      ],
+      "newPlayerBarStatus": "likely broken: #like-button-renderer and yt-icon-button.next-button are both gone; waitForElement (maxRetry -1) polls every 100 ms forever and the dislike observer is never attached",
+      "userEnabled": null
+    },
+    {
+      "id": "album-actions",
+      "name": "Album Actions",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#album-actions-album-actions",
+      "origin": "upstream",
+      "summary": "Adds Undislike/Dislike/Like/Unlike-all buttons to album/playlist headers that click every track row's like/dislike button.",
+      "source": [
+        "src/plugins/album-actions/index.tsx",
+        "src/plugins/album-actions/templates/index.ts",
+        "src/plugins/album-actions/templates/like-button.tsx",
+        "src/plugins/album-actions/templates/dislike-button.tsx",
+        "src/plugins/album-actions/templates/undislike-button.tsx",
+        "src/plugins/album-actions/templates/unlike-button.tsx"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.album-actions.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "#browse-page",
+        "#continuations",
+        "#action-buttons",
+        "ytmusic-playlist-shelf-renderer",
+        ":nth-last-child(1 of ytmusic-shelf-renderer)",
+        "yt-button-shape.ytmusic-like-button-renderer",
+        "#button-shape-like > button",
+        "#button-shape-dislike > button",
+        ".like-menu",
+        "#ytmd-album-action-buttons"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "performance-improvement",
+      "name": "Performance improvement [Beta]",
+      "domain": "content-library",
+      "doc": "docs/plugins/content-library.md#performance-improvement-beta-performance-improvement",
+      "origin": "upstream",
+      "summary": "Injects CY Fung's rm3 (Polymer element recycling) and CPU tamer (setTimeout/setInterval coalescing) userscripts into the renderer.",
+      "source": [
+        "src/plugins/performance-improvement/index.ts",
+        "src/plugins/performance-improvement/scripts/rm3/index.ts",
+        "src/plugins/performance-improvement/scripts/rm3/rm3.js",
+        "src/plugins/performance-improvement/scripts/rm3/rm3.d.ts",
+        "src/plugins/performance-improvement/scripts/cpu-tamer/index.ts",
+        "src/plugins/performance-improvement/scripts/cpu-tamer/cpu-tamer-by-animationframe.js",
+        "src/plugins/performance-improvement/scripts/cpu-tamer/cpu-tamer-by-animationframe.d.ts",
+        "src/plugins/performance-improvement/scripts/cpu-tamer/cpu-tamer-by-dom-mutation.js",
+        "src/plugins/performance-improvement/scripts/cpu-tamer/cpu-tamer-by-dom-mutation.d.ts"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.performance-improvement.enabled"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "shortcuts",
+      "name": "Shortcuts",
+      "domain": "system-controls",
+      "doc": "docs/plugins/system-controls.md#shortcuts-shortcuts",
+      "origin": "upstream",
+      "summary": "Global (globalShortcut) and window-local (electron-localshortcut) hotkeys for previous/play-pause/next, optional hardware media-key override, and an MPRIS D-Bus player on Linux.",
+      "source": [
+        "src/plugins/shortcuts/index.ts",
+        "src/plugins/shortcuts/main.ts",
+        "src/plugins/shortcuts/menu.ts",
+        "src/plugins/shortcuts/mpris.ts",
+        "src/plugins/shortcuts/mpris-service.d.ts"
+      ],
+      "entryPoints": [
+        "main",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.shortcuts.enabled",
+        "plugins.shortcuts.overrideMediaKeys",
+        "plugins.shortcuts.global.previous",
+        "plugins.shortcuts.global.playPause",
+        "plugins.shortcuts.global.next",
+        "plugins.shortcuts.local.previous",
+        "plugins.shortcuts.local.playPause",
+        "plugins.shortcuts.local.next"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:toggle-play",
+        "peard:next-video",
+        "peard:previous-video",
+        "peard:switch-repeat",
+        "peard:shuffle",
+        "peard:update-volume",
+        "peard:click-fullscreen-button",
+        "peard:get-shuffle",
+        "peard:get-fullscreen",
+        "peard:get-queue",
+        "peard:seek-to",
+        "peard:seek-by",
+        "setVolume",
+        "peard:setup-seeked-listener",
+        "peard:setup-time-changed-listener",
+        "peard:setup-repeat-changed-listener",
+        "peard:setup-volume-changed-listener",
+        "peard:setup-shuffle-changed-listener",
+        "peard:setup-fullscreen-changed-listener",
+        "peard:setup-autoplay-changed-listener",
+        "peard:player-api-loaded",
+        "peard:seeked",
+        "peard:repeat-changed",
+        "peard:shuffle-changed",
+        "peard:fullscreen-changed",
+        "peard:set-fullscreen",
+        "peard:fullscreen-changed-supported",
+        "peard:autoplay-changed",
+        "peard:get-queue-response",
+        "peard:volume-changed"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "touchbar",
+      "name": "TouchBar",
+      "domain": "system-controls",
+      "doc": "docs/plugins/system-controls.md#touchbar-touchbar",
+      "origin": "upstream",
+      "summary": "macOS Touch Bar with cover + title scrubber and previous/play-pause/next/dislike/like segmented buttons.",
+      "source": [
+        "src/plugins/touchbar/index.ts"
+      ],
+      "entryPoints": [
+        "main"
+      ],
+      "configKeys": [
+        "plugins.touchbar.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:previous-video",
+        "peard:toggle-play",
+        "peard:next-video",
+        "peard:update-like"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": null
+    },
+    {
+      "id": "taskbar-mediacontrol",
+      "name": "Taskbar Media Control",
+      "domain": "system-controls",
+      "doc": "docs/plugins/system-controls.md#taskbar-media-control-taskbar-mediacontrol",
+      "origin": "upstream",
+      "summary": "Windows taskbar thumbnail toolbar (setThumbarButtons) with previous/play-pause/next, theme-aware icons, re-applied on song change and window show.",
+      "source": [
+        "src/plugins/taskbar-mediacontrol/index.ts"
+      ],
+      "entryPoints": [
+        "main"
+      ],
+      "configKeys": [
+        "plugins.taskbar-mediacontrol.enabled"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:previous-video",
+        "peard:toggle-play",
+        "peard:next-video"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "domain": "system-controls",
+      "doc": "docs/plugins/system-controls.md#notifications-notifications",
+      "origin": "upstream-modified",
+      "summary": "Song-change desktop notifications (Linux urgency), Windows interactive toast XML with prev/play-pause/next protocol buttons in 7 styles and tray-click toggle; fork adds a tray hover mini-player.",
+      "source": [
+        "src/plugins/notifications/index.ts",
+        "src/plugins/notifications/main.ts",
+        "src/plugins/notifications/menu.ts",
+        "src/plugins/notifications/interactive.ts",
+        "src/plugins/notifications/utils.ts",
+        "src/plugins/notifications/hover-popup.ts",
+        "assets/hover-popup.html"
+      ],
+      "entryPoints": [
+        "main",
+        "menu"
+      ],
+      "configKeys": [
+        "plugins.notifications.enabled",
+        "plugins.notifications.unpauseNotification",
+        "plugins.notifications.urgency",
+        "plugins.notifications.interactive",
+        "plugins.notifications.toastStyle",
+        "plugins.notifications.refreshOnPlayPause",
+        "plugins.notifications.trayControls",
+        "plugins.notifications.hideButtonText",
+        "plugins.notifications.hoverControls"
+      ],
+      "defaultEnabled": false,
+      "restartNeeded": true,
+      "ipcChannels": [
+        "peard:player-api-loaded",
+        "peard:setup-time-changed-listener",
+        "peard:previous-video",
+        "peard:next-video",
+        "peard:play",
+        "peard:pause",
+        "peard:toggle-play"
+      ],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "utils",
+      "name": "Plugin utilities",
+      "domain": "system-controls",
+      "doc": "docs/plugins/system-controls.md#plugin-utilities-utils",
+      "origin": "upstream",
+      "summary": "Shared helpers (not a plugin): injectCSS, injectCSSAsFile, fileExists, getNetFetchAsFetch, defineMainPlugin/definePreloadPlugin/defineMenuPlugin, definePluginConfig + legacy plugin types, ElementFromHtml, ImageElementFromSrc, isMusicOrVideoTrack, isAlbumOrPlaylist, isPlayerMenu.",
+      "source": [
+        "src/plugins/utils/common/index.ts",
+        "src/plugins/utils/common/types.ts",
+        "src/plugins/utils/main/index.ts",
+        "src/plugins/utils/main/css.ts",
+        "src/plugins/utils/main/fetch.ts",
+        "src/plugins/utils/main/fs.ts",
+        "src/plugins/utils/main/types.ts",
+        "src/plugins/utils/renderer/index.ts",
+        "src/plugins/utils/renderer/check.ts",
+        "src/plugins/utils/renderer/html.ts"
+      ],
+      "entryPoints": [],
+      "configKeys": [],
+      "defaultEnabled": null,
+      "restartNeeded": null,
+      "ipcChannels": [],
+      "domAnchors": [
+        "tp-yt-paper-listbox #navigation-endpoint",
+        "ytmusic-menu-renderer.ytmusic-player-bar"
+      ],
+      "newPlayerBarStatus": "partially affected: isPlayerMenu matches dead selector ytmusic-menu-renderer.ytmusic-player-bar, so it always returns falsy and picture-in-picture / playback-speed never inject into the player song menu; other helpers unaffected",
+      "userEnabled": null
+    }
+  ]
+}
