@@ -107,9 +107,9 @@ async function main() {
   const geom = await evaluate(
     ws,
     `(() => {
-      const pb = document.querySelector('#progress-bar');
+      const pb = (document.querySelector('input.ytMusicMiniPlayerProgressBar') ?? document.querySelector('#progress-bar'));
       const r = pb.getBoundingClientRect();
-      return { left: r.left, right: r.right, width: r.width, y: r.top + r.height / 2,
+      return { left: r.left, right: r.right, width: r.width, y: r.top + Math.min(1, r.height / 2),
                duration: document.querySelector('video').duration };
     })()`,
   );
@@ -137,8 +137,8 @@ async function main() {
   const xs = [];
   const startX = Math.max(geom.left + 40, 40);
   const endX = Math.min(geom.right - 40, 1450);
-  for (let i = 0; i <= 4; i++) {
-    xs.push(startX + ((endX - startX) * i) / 4);
+  for (let i = 0; i <= 8; i++) {
+    xs.push(startX + ((endX - startX) * i) / 8);
   }
 
   const samples = [];
@@ -183,24 +183,24 @@ async function main() {
   console.log(`(pass 1 innerWidth was ${base.w})`);
 
   await rpc(ws, 'Emulation.setDeviceMetricsOverride', {
-    width: 1100, height: base.h, deviceScaleFactor: 0, mobile: false,
+    width: 1500, height: base.h, deviceScaleFactor: 0, mobile: false,
   });
   await sleep(1500);
 
   const geom2 = await evaluate(
     ws,
     `(() => {
-      const pb = document.querySelector('#progress-bar');
+      const pb = (document.querySelector('input.ytMusicMiniPlayerProgressBar') ?? document.querySelector('#progress-bar'));
       const r = pb.getBoundingClientRect();
-      return { left: r.left, right: r.right, width: r.width, y: r.top + r.height / 2,
+      return { left: r.left, right: r.right, width: r.width, y: r.top + Math.min(1, r.height / 2),
                duration: document.querySelector('video').duration, inner: window.innerWidth };
     })()`,
   );
   console.log(`element box: left=${geom2.left.toFixed(1)} right=${geom2.right.toFixed(1)} width=${geom2.width.toFixed(1)} innerWidth=${geom2.inner}`);
 
   const samples2 = [];
-  for (let i = 0; i <= 4; i++) {
-    const x = 60 + ((geom2.inner - 120) * i) / 4;
+  for (let i = 0; i <= 8; i++) {
+    const x = 60 + ((geom2.inner - 120) * i) / 8;
     await rpc(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y: geom2.y, button: 'none', buttons: 0 });
     await rpc(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y: geom2.y, button: 'left', buttons: 1, clickCount: 1 });
     await rpc(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y: geom2.y, button: 'left', buttons: 0, clickCount: 1 });

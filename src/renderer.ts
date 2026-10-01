@@ -7,6 +7,13 @@ import 'mdui';
 import { startingPages } from './providers/extracted-data';
 import { setupSongInfo } from './providers/song-info-front';
 import {
+  getAppStore,
+  getLikeButton,
+  getMuteButton,
+  getPlayerControl,
+  getVolumeSlider,
+} from './providers/dom-elements';
+import {
   createContext,
   forceLoadRendererPlugin,
   forceUnloadRendererPlugin,
@@ -71,14 +78,10 @@ async function onApiLoaded() {
     );
 
   window.ipcRenderer.on('peard:previous-video', () => {
-    document
-      .querySelector<HTMLElement>('.previous-button.ytmusic-player-bar')
-      ?.click();
+    getPlayerControl('Previous')?.click();
   });
   window.ipcRenderer.on('peard:next-video', () => {
-    document
-      .querySelector<HTMLElement>('.next-button.ytmusic-player-bar')
-      ?.click();
+    getPlayerControl('Next')?.click();
   });
   window.ipcRenderer.on('peard:play', (_) => {
     api?.playVideo();
@@ -93,14 +96,20 @@ async function onApiLoaded() {
   window.ipcRenderer.on('peard:seek-to', (_, t: number) => api!.seekTo(t));
   window.ipcRenderer.on('peard:seek-by', (_, t: number) => api!.seekBy(t));
   window.ipcRenderer.on('peard:shuffle', () => {
-    document
-      .querySelector<
-        HTMLElement & { queue: { shuffle: () => void } }
-      >('ytmusic-player-bar')
-      ?.queue.shuffle();
+    const legacyBar = document.querySelector<
+      HTMLElement & { queue: { shuffle: () => void } }
+    >('ytmusic-player-bar');
+    if (legacyBar) {
+      legacyBar.queue.shuffle();
+    } else {
+      getPlayerControl('Shuffle')?.click();
+    }
   });
 
   const isShuffled = () => {
+    const store = getAppStore();
+    if (store) return store.getState().queue.shuffleEnabled;
+
     const isShuffled =
       document
         .querySelector<HTMLElement>('ytmusic-player-bar')
@@ -116,31 +125,63 @@ async function onApiLoaded() {
   window.ipcRenderer.on(
     'peard:update-like',
     (_, status: 'LIKE' | 'DISLIKE' = 'LIKE') => {
-      document
-        .querySelector<
-          HTMLElement & { updateLikeStatus: (status: string) => void }
-        >('#like-button-renderer')
-        ?.updateLikeStatus(status);
+      const legacyRenderer = document.querySelector<
+        HTMLElement & { updateLikeStatus: (status: string) => void }
+      >('#like-button-renderer');
+      if (legacyRenderer) {
+        legacyRenderer.updateLikeStatus(status);
+        return;
+      }
+      // The new like/dislike buttons toggle, so only click when the status
+      // would actually change.
+      const button = getLikeButton(status === 'LIKE' ? 'like' : 'dislike');
+      if (button && button.getAttribute('aria-pressed') !== 'true') {
+        button.click();
+      }
     },
   );
-  window.ipcRenderer.on('peard:switch-repeat', (_, repeat = 1) => {
+  window.ipcRenderer.on('peard:switch-repeat', async (_, repeat = 1) => {
+    const legacyBar = document.querySelector<
+      HTMLElement & { onRepeatButtonClick: () => void }
+    >('ytmusic-player-bar');
     for (let i = 0; i < repeat; i++) {
-      document
-        .querySelector<
-          HTMLElement & { onRepeatButtonClick: () => void }
-        >('ytmusic-player-bar')
-        ?.onRepeatButtonClick();
+      if (legacyBar) {
+        legacyBar.onRepeatButtonClick();
+      } else {
+        // The new repeat button ignores a second click made in the same task
+        // as the first, so yield between clicks.
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+        getPlayerControl('Repeat')?.click();
+      }
     }
   });
   window.ipcRenderer.on('peard:update-volume', (_, volume: number) => {
-    document
-      .querySelector<
-        HTMLElement & { updateVolume: (volume: number) => void }
-      >('ytmusic-player-bar')
-      ?.updateVolume(volume);
+    const legacyBar = document.querySelector<
+      HTMLElement & { updateVolume: (volume: number) => void }
+    >('ytmusic-player-bar');
+    if (legacyBar) {
+      legacyBar.updateVolume(volume);
+      return;
+    }
+    // Drive the slider rather than the player API: `api.setVolume` changes the
+    // audio but leaves YouTube's slider showing the old value.
+    const slider = getVolumeSlider();
+    if (slider) {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set?.call(slider, String(volume));
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      api?.setVolume(volume);
+    }
   });
 
   const isFullscreen = () => {
+    const store = getAppStore();
+    if (store) return store.getState().player.fullscreened;
+
     const isFullscreen =
       document
         .querySelector<HTMLElement>('ytmusic-player-bar')
@@ -174,11 +215,14 @@ async function onApiLoaded() {
   );
 
   window.ipcRenderer.on('peard:toggle-mute', (_) => {
-    document
-      .querySelector<
-        HTMLElement & { onVolumeClick: () => void }
-      >('ytmusic-player-bar')
-      ?.onVolumeClick();
+    const legacyBar = document.querySelector<
+      HTMLElement & { onVolumeClick: () => void }
+    >('ytmusic-player-bar');
+    if (legacyBar) {
+      legacyBar.onVolumeClick();
+    } else {
+      getMuteButton()?.click();
+    }
   });
 
   window.ipcRenderer.on('peard:get-queue', () => {
@@ -393,7 +437,7 @@ async function onApiLoaded() {
   if (likeButtonsOptions) {
     const style = document.createElement('style');
     style.textContent = `
-      ytmusic-player-bar[is-mweb-player-bar-modernization-enabled] .middle-controls-buttons.ytmusic-player-bar, #like-button-renderer {
+      ytmusic-player-bar[is-mweb-player-bar-modernization-enabled] .middle-controls-buttons.ytmusic-player-bar, #like-button-renderer, ytmusic-miniplayer .ytMusicMiniPlayerActionBar {
         display: ${
           likeButtonsOptions === 'hide' ? 'none' : 'inherit'
         } !important;
@@ -411,7 +455,8 @@ async function onApiLoaded() {
   if (window.mainConfig.get('options.swapLikeButtonsOrder')) {
     const style = document.createElement('style');
     style.textContent = `
-      #like-button-renderer {
+      #like-button-renderer,
+      ytmusic-miniplayer .ytSegmentedLikeDislikeButtonViewModelSegmentedButtonsWrapper {
         display: inline-flex;
         flex-direction: row-reverse;
       }`;

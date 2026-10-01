@@ -1,4 +1,5 @@
 import { singleton } from './decorators';
+import { getAppStore, getPlayerBar } from './dom-elements';
 
 import { LikeType, type GetState } from '@/types/datahost-get-state';
 
@@ -36,21 +37,68 @@ export const setupSeekedListener = singleton(() => {
 });
 
 export const setupTimeChangedListener = singleton(() => {
-  const progressObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      const target = mutation.target as Node & { value: string };
-      const numberValue = Number(target.value);
-      window.ipcRenderer.send('peard:time-changed', numberValue);
-      songInfo.elapsedSeconds = numberValue;
-    }
-  });
-  const progressBar = document.querySelector('#progress-bar');
-  if (progressBar) {
-    progressObserver.observe(progressBar, { attributeFilter: ['value'] });
+  const sendTime = (seconds: number) => {
+    window.ipcRenderer.send('peard:time-changed', seconds);
+    songInfo.elapsedSeconds = seconds;
+  };
+
+  const legacyProgressBar = document.querySelector('#progress-bar');
+  if (legacyProgressBar) {
+    const progressObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const target = mutation.target as Node & { value: string };
+        sendTime(Number(target.value));
+      }
+    });
+    progressObserver.observe(legacyProgressBar, { attributeFilter: ['value'] });
+    return;
   }
+
+  // The new seek bar's `value` is a property, not an attribute, so there is
+  // nothing to observe. Follow the video instead, once per whole second like
+  // the old slider did.
+  const video = document.querySelector('video');
+  let lastSecond = -1;
+  video?.addEventListener('timeupdate', () => {
+    const second = Math.floor(video.currentTime);
+    if (second === lastSecond) return;
+    lastSecond = second;
+    sendTime(second);
+  });
 });
 
+// The new player bar (`ytmusic-miniplayer`) no longer mirrors repeat, shuffle
+// and fullscreen as attributes, so read them from the app store instead. Calls
+// `onChange` with the initial value, then on every change. Returns false when
+// the store is unavailable or the old player bar is present.
+const watchStoreValue = <T>(
+  select: (state: GetState) => T,
+  onChange: (value: T) => void,
+) => {
+  const store = getAppStore();
+  if (!store || document.querySelector('ytmusic-player-bar')) return false;
+
+  let last = select(store.getState());
+  store.subscribe(() => {
+    const value = select(store.getState());
+    if (value === last) return;
+    last = value;
+    onChange(value);
+  });
+  onChange(last);
+  return true;
+};
+
 export const setupRepeatChangedListener = singleton(() => {
+  if (
+    watchStoreValue(
+      (state) => state.queue.repeatMode,
+      (mode) => window.ipcRenderer.send('peard:repeat-changed', mode),
+    )
+  ) {
+    return;
+  }
+
   const repeatObserver = new MutationObserver((mutations) => {
     // provided by App
     window.ipcRenderer.send(
@@ -112,7 +160,37 @@ export const setupLikeChangedListener = singleton(() => {
       'peard:like-changed',
       mapLikeStatus(likeButtonRenderer.getAttribute?.(LIKE_STATUS_ATTRIBUTE)),
     );
+    return;
   }
+
+  // New player bar: separate like/dislike toggle buttons, re-rendered per
+  // song, so watch `aria-pressed` across the whole bar.
+  const playerBar = getPlayerBar();
+  if (!playerBar) return;
+
+  const readLikeStatus = () => {
+    const pressed = (type: 'like' | 'dislike') =>
+      playerBar
+        .querySelector(`${type}-button-view-model button`)
+        ?.getAttribute('aria-pressed') === 'true';
+    if (pressed('like')) return LikeType.Like;
+    if (pressed('dislike')) return LikeType.Dislike;
+    return LikeType.Indifferent;
+  };
+
+  let lastStatus = readLikeStatus();
+  new MutationObserver(() => {
+    const status = readLikeStatus();
+    if (status === lastStatus) return;
+    lastStatus = status;
+    window.ipcRenderer.send('peard:like-changed', status);
+  }).observe(playerBar, {
+    attributes: true,
+    attributeFilter: ['aria-pressed'],
+    childList: true,
+    subtree: true,
+  });
+  window.ipcRenderer.send('peard:like-changed', lastStatus);
 });
 
 export const setupVolumeChangedListener = singleton((api: MusicPlayer) => {
@@ -131,6 +209,15 @@ export const setupVolumeChangedListener = singleton((api: MusicPlayer) => {
 });
 
 export const setupShuffleChangedListener = singleton(() => {
+  if (
+    watchStoreValue(
+      (state) => state.queue.shuffleEnabled,
+      (enabled) => window.ipcRenderer.send('peard:shuffle-changed', enabled),
+    )
+  ) {
+    return;
+  }
+
   const playerBar = document.querySelector('ytmusic-player-bar');
 
   if (!playerBar) {
@@ -154,6 +241,16 @@ export const setupShuffleChangedListener = singleton(() => {
 });
 
 export const setupFullScreenChangedListener = singleton(() => {
+  if (
+    watchStoreValue(
+      (state) => state.player.fullscreened,
+      (fullscreen) =>
+        window.ipcRenderer.send('peard:fullscreen-changed', fullscreen),
+    )
+  ) {
+    return;
+  }
+
   const playerBar = document.querySelector('ytmusic-player-bar');
 
   if (!playerBar) {
@@ -186,7 +283,9 @@ export const setupAutoPlayChangedListener = singleton(() => {
     window.ipcRenderer.send('peard:autoplay-changed');
   });
 
-  observer.observe(autoplaySlider!, {
+  if (!autoplaySlider) return;
+
+  observer.observe(autoplaySlider, {
     attributes: true,
     childList: false,
     subtree: false,

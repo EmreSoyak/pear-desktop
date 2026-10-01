@@ -1,5 +1,12 @@
 import { createPlugin } from '@/utils';
 import { t } from '@/i18n';
+import {
+  getAppStore,
+  getPlayerControl,
+  getPlayerControlWrapper,
+  getProgressBar,
+  isNewPlayerBar,
+} from '@/providers/dom-elements';
 
 import type { MusicPlayer } from '@/types/music-player';
 import type { VideoDataChanged } from '@/types/video-data-changed';
@@ -9,11 +16,18 @@ export type LimitedRepeatConfig = {
   logToConsole: boolean;
 };
 
-type PlayerBar = HTMLElement & {
-  onRepeatButtonClick: () => void;
-  __lrOriginalRepeatClick?: () => void;
-  __lrPatched?: boolean;
-};
+// The new seek bar is a native range input with a 12px thumb, and a range
+// input's track runs from thumb-centre to thumb-centre: 6px in from each edge.
+// Calibrated by clicking the bar and reading back currentTime at 1100px and
+// 1500px viewports - both fitted left = 5.95px and right inset ~6px.
+const NEW_BAR_TRACK_INSET = 6;
+
+// Everything a click can land on that counts as the player bar, the seek bar
+// and the play/pause control - in both the new and the old layout.
+const PLAYER_BAR_SELECTOR = 'ytmusic-miniplayer, ytmusic-player-bar';
+const SEEK_BAR_SELECTOR = '.ytMusicMiniPlayerProgressBarWrapper, #progress-bar';
+const PLAY_PAUSE_SELECTOR =
+  '.ytmusicPlayerControlsPlayPauseButton, #play-pause-button';
 
 // How close to point B we switch from `timeupdate` (~4 Hz, up to 250ms of
 // overshoot) to a fine-grained timer, so the loop point stays tight.
@@ -27,6 +41,7 @@ const LAYOUT_TICK_MS = 400;
 const BUTTON_ID = 'limited-repeat-button';
 const OVERLAY_ID = 'limited-repeat-overlay';
 const STYLE_ID = 'limited-repeat-style';
+const MASK_STYLE_ID = 'limited-repeat-mask';
 
 // A repeat-style loop arrow with an A-B bracket underneath.
 const BUTTON_SVG = `
@@ -65,6 +80,22 @@ const STYLE = `
 }
 #${BUTTON_ID}[data-lr] {
   opacity: 1;
+  color: #ff0033;
+}
+/* New player bar: match its 48px round icon buttons. Spacing comes from the
+   controls row's own flex gap. */
+#${BUTTON_ID}[data-layout='new'] {
+  width: 48px;
+  height: 48px;
+  padding: 12px;
+  margin: 0;
+  border-radius: 24px;
+  color: #fff;
+}
+#${BUTTON_ID}[data-layout='new']:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+#${BUTTON_ID}[data-layout='new'][data-lr] {
   color: #ff0033;
 }
 
@@ -183,13 +214,12 @@ export default createPlugin<
     playListener: (() => void) | null;
     durationListener: (() => void) | null;
     hookedVideo: HTMLVideoElement | null;
-    patchedBar: PlayerBar | null;
+    repeatModeUnsubscribe: (() => void) | null;
 
     log: (msg: string) => void;
     injectStyle: () => void;
     getVideo: () => HTMLVideoElement | null;
     getDuration: () => number;
-    getPlayerBar: () => PlayerBar | null;
     getRepeatButton: () => HTMLElement | null;
     getProgressBar: () => HTMLElement | null;
     getTrack: () => { left: number; width: number } | null;
@@ -201,8 +231,8 @@ export default createPlugin<
     clearBarMask: () => void;
     startDrag: (side: 'a' | 'b', event: PointerEvent) => void;
     timeFromClientX: (clientX: number) => number | null;
-    patchRepeatButton: () => void;
-    unpatchRepeatButton: () => void;
+    watchRepeatMode: () => void;
+    unwatchRepeatMode: () => void;
     watchPlayerBar: () => void;
     toggle: () => void;
     engage: () => void;
@@ -270,7 +300,7 @@ export default createPlugin<
     playListener: null,
     durationListener: null,
     hookedVideo: null,
-    patchedBar: null,
+    repeatModeUnsubscribe: null,
 
     async start({ getConfig }) {
       this.config = await getConfig();
@@ -282,7 +312,7 @@ export default createPlugin<
 
       this.createButton();
       this.createOverlay();
-      this.patchRepeatButton();
+      this.watchRepeatMode();
       this.watchPlayerBar();
       this.hookVideo();
 
@@ -323,7 +353,7 @@ export default createPlugin<
 
     stop() {
       this.cancel('plugin-stopped');
-      this.unpatchRepeatButton();
+      this.unwatchRepeatMode();
 
       if (this.playerBarObserver) {
         this.playerBarObserver.disconnect();
@@ -387,29 +417,32 @@ export default createPlugin<
       return Number.isFinite(duration) && duration > 0 ? duration : 0;
     },
 
-    getPlayerBar(): PlayerBar | null {
-      return document.querySelector<PlayerBar>('ytmusic-player-bar');
-    },
-
     getRepeatButton(): HTMLElement | null {
-      return document.querySelector<HTMLElement>('#right-controls .repeat');
+      // In the new layout, the wrapper is the sibling of the other controls.
+      return getPlayerControlWrapper('Repeat') ?? getPlayerControl('Repeat');
     },
 
     getProgressBar(): HTMLElement | null {
-      return (
-        document.querySelector<HTMLElement>('#progress-bar') ??
-        document.querySelector<HTMLElement>('ytmusic-player-bar #progress-bar')
-      );
+      return getProgressBar();
     },
 
     getTrack(): { left: number; width: number } | null {
-      // The progress bar's element box is offset to the left of the track it
-      // actually represents (measured at -17px), while its *width* matches the
-      // track. Determined by clicking the bar at known x positions and reading
-      // back currentTime, across three window sizes: the track consistently
-      // starts at viewport x=0 and is as wide as the element. Using the
-      // element's own left puts every marker out by more than a percent.
       const rect = this.getProgressBar()?.getBoundingClientRect();
+
+      if (rect && rect.width > 0 && isNewPlayerBar()) {
+        return {
+          left: rect.left + NEW_BAR_TRACK_INSET,
+          width: rect.width - NEW_BAR_TRACK_INSET * 2,
+        };
+      }
+
+      // Old layout: the progress bar's element box is offset to the left of
+      // the track it actually represents (measured at -17px), while its
+      // *width* matches the track. Determined by clicking the bar at known x
+      // positions and reading back currentTime, across three window sizes:
+      // the track consistently starts at viewport x=0 and is as wide as the
+      // element. Using the element's own left puts every marker out by more
+      // than a percent.
       if (rect && rect.width > 0) return { left: 0, width: rect.width };
 
       const width = document.documentElement.clientWidth;
@@ -432,7 +465,13 @@ export default createPlugin<
 
       const button = document.createElement('button');
       button.id = BUTTON_ID;
-      button.className = 'style-scope ytmusic-player-bar';
+      if (isNewPlayerBar()) {
+        // Deliberately not YouTube's own control classes - its code queries
+        // those, and must not pick this button up.
+        button.dataset.layout = 'new';
+      } else {
+        button.className = 'style-scope ytmusic-player-bar';
+      }
       button.title = t('plugins.limited-repeat.button.title');
       button.setAttribute('aria-label', button.title);
       button.innerHTML = BUTTON_SVG;
@@ -524,11 +563,16 @@ export default createPlugin<
       if (!overlay || !progressBar || !track) return;
 
       const rect = progressBar.getBoundingClientRect();
+      const height = Math.max(rect.height, 28);
 
       overlay.style.left = `${track.left}px`;
-      overlay.style.top = `${rect.top}px`;
+      // The new seek bar is only 3px tall, so centre the overlay on it rather
+      // than hanging it below, over the controls.
+      overlay.style.top = isNewPlayerBar()
+        ? `${rect.top + rect.height / 2 - height / 2}px`
+        : `${rect.top}px`;
       overlay.style.width = `${track.width}px`;
-      overlay.style.height = `${Math.max(rect.height, 28)}px`;
+      overlay.style.height = `${height}px`;
 
       this.updateMarkers();
     },
@@ -578,15 +622,27 @@ export default createPlugin<
         `linear-gradient(to right, transparent 0 ${a}, ` +
         `#000 ${a} ${b}, transparent ${b} 100%)`;
 
-      progressBar.style.setProperty('-webkit-mask-image', gradient);
-      progressBar.style.setProperty('mask-image', gradient);
+      // A stylesheet rule, not an inline style: the new seek bar draws its
+      // fill through its `style` attribute, and YouTube rewrites that whole
+      // attribute as it plays - wiping an inline mask until the next layout.
+      const selector = isNewPlayerBar()
+        ? 'input.ytMusicMiniPlayerProgressBar'
+        : '#progress-bar';
+      const css =
+        `${selector} { -webkit-mask-image: ${gradient} !important; ` +
+        `mask-image: ${gradient} !important; }`;
+
+      let style = document.getElementById(MASK_STYLE_ID);
+      if (!style) {
+        style = document.createElement('style');
+        style.id = MASK_STYLE_ID;
+        document.head.appendChild(style);
+      }
+      if (style.textContent !== css) style.textContent = css;
     },
 
     clearBarMask() {
-      const progressBar = this.getProgressBar();
-      if (!progressBar) return;
-      progressBar.style.removeProperty('-webkit-mask-image');
-      progressBar.style.removeProperty('mask-image');
+      document.getElementById(MASK_STYLE_ID)?.remove();
     },
 
     timeFromClientX(clientX: number): number | null {
@@ -664,46 +720,37 @@ export default createPlugin<
 
     // --- Repeat button: changing repeat mode spends LR ---
 
-    patchRepeatButton() {
-      const bar = this.getPlayerBar();
-      if (!bar || bar.__lrPatched) return;
+    watchRepeatMode() {
+      // Any repeat-mode change spends LR: a real click on the repeat button,
+      // and the `peard:switch-repeat` IPC path (src/renderer.ts) used by the
+      // API server and global shortcuts. The app store sees all of them, in
+      // both the new and the old player bar - patching a component method
+      // did not survive YouTube's player bar redesign.
+      const store = getAppStore();
+      if (!store || this.repeatModeUnsubscribe) return;
 
-      const original = bar.onRepeatButtonClick.bind(bar);
-      bar.__lrOriginalRepeatClick = original;
-      bar.__lrPatched = true;
-      this.patchedBar = bar;
-
-      // Real mouse clicks on the repeat button are caught by `onPointerDown`.
-      // This patch covers the `peard:switch-repeat` IPC path (see
-      // src/renderer.ts), used by the API server and global shortcuts.
-      bar.onRepeatButtonClick = () => {
+      let lastMode = store.getState().queue.repeatMode;
+      this.repeatModeUnsubscribe = store.subscribe(() => {
+        const mode = store.getState().queue.repeatMode;
+        if (mode === lastMode) return;
+        lastMode = mode;
         this.cancel('repeat-mode-changed');
-        original();
-      };
+      });
     },
 
-    unpatchRepeatButton() {
-      const bar = this.getPlayerBar();
-      if (!bar?.__lrPatched) return;
-      if (bar.__lrOriginalRepeatClick) {
-        bar.onRepeatButtonClick = bar.__lrOriginalRepeatClick;
-      }
-      delete bar.__lrOriginalRepeatClick;
-      delete bar.__lrPatched;
-      this.patchedBar = null;
+    unwatchRepeatMode() {
+      this.repeatModeUnsubscribe?.();
+      this.repeatModeUnsubscribe = null;
     },
 
     watchPlayerBar() {
-      // Runs on every DOM mutation under body, so key off element identity
-      // rather than a flag - otherwise an unlucky ordering spends LR mid-loop.
+      // Runs on every DOM mutation under body: YouTube re-renders the player
+      // bar, which drops the LR button, so put it back whenever it is missing.
       this.playerBarObserver = new MutationObserver(() => {
         if (!document.getElementById(BUTTON_ID)) this.createButton();
         if (!document.getElementById(OVERLAY_ID)) this.createOverlay();
-
-        const bar = this.getPlayerBar();
-        if (!bar || bar === this.patchedBar) return;
-        this.cancel('player-bar-recreated');
-        this.patchRepeatButton();
+        // The store may not exist yet when the player API first becomes ready.
+        if (!this.repeatModeUnsubscribe) this.watchRepeatMode();
       });
       this.playerBarObserver.observe(document.body, {
         childList: true,
@@ -817,13 +864,26 @@ export default createPlugin<
       if (target.closest(`#${BUTTON_ID}`)) return;
       if (target.closest(`#${OVERLAY_ID}`)) return;
       // Seeking on the bar is allowed and does not spend LR.
-      if (target.closest('#progress-bar')) return;
+      if (target.closest(SEEK_BAR_SELECTOR)) return;
+      // On the right half of the window YouTube's right-hand section overlaps
+      // the lower half of the seek bar, so a click aimed at the bar can land on
+      // that section instead. Anything within the bar's strip counts as the bar.
+      const seekStrip = document
+        .querySelector(SEEK_BAR_SELECTOR)
+        ?.getBoundingClientRect();
+      if (
+        seekStrip &&
+        event.clientY >= seekStrip.top &&
+        event.clientY <= seekStrip.bottom
+      ) {
+        return;
+      }
 
       // Clicks outside the player bar (browsing, the queue, etc.) are harmless;
       // a resulting song change spends LR via `videodatachange` anyway.
-      if (!target.closest('ytmusic-player-bar')) return;
+      if (!target.closest(PLAYER_BAR_SELECTOR)) return;
       // Play/pause is the one control that leaves LR armed.
-      if (target.closest('#play-pause-button')) return;
+      if (target.closest(PLAY_PAUSE_SELECTOR)) return;
 
       this.cancel('other-control');
     },

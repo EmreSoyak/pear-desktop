@@ -147,7 +147,18 @@ while you're still aiming.
 
 See [tests/README.md](tests/README.md). All are runnable against the live app.
 
-Last measured results:
+**YouTube's new player bar (2026-10-01):** use `lr-newbar-test.cjs`. The
+older harnesses below target the old `ytmusic-player-bar` DOM (only
+`lr-calib.cjs` was retargeted). Last run, 22/22 twice in a row:
+
+- marker vs YouTube's own seek: **0.42s** error at 2.45s per pixel
+- the mask survived every one of YouTube's style rewrites
+- loop overshoot **3ms** with timers on time, **84ms** when the hidden window
+  throttles timers to 250ms (LESSONS #15)
+- the repeat button spends LR on a real click and via the store
+  (programmatic) path
+
+Results measured on the old bar:
 
 | Test | Result |
 |------|--------|
