@@ -104,8 +104,6 @@ export class YTMusic implements LyricProvider {
       .padStart(2, '0')}.${remaining.toString().padStart(2, '0')}`;
   }
 
-  // RATE LIMITED (2 req per sec)
-  private PROXIED_ENDPOINT = 'https://ytmbrowseproxy.zvz.be/';
 
   private fetchNext(videoId: string) {
     const app = document.querySelector<MusicPlayerAppElement>('ytmusic-app');
@@ -122,15 +120,34 @@ export class YTMusic implements LyricProvider {
     });
   }
 
-  private fetchBrowse(browseId: string) {
-    return fetch(this.PROXIED_ENDPOINT + 'browse?prettyPrint=false', {
-      headers,
-      method: 'POST',
-      body: JSON.stringify({
-        browseId,
-        context: { client },
-      }),
-    }).then((res) => res.json()) as Promise<BrowseData>;
+  // Timed lyrics only come back for a mobile client (26 = iOS Music); the web
+  // client gets plain text. This used to go through a third-party proxy
+  // (ytmbrowseproxy.zvz.be), which went down on 2026-10-25 (502, surfacing as
+  // "Failed to fetch"). The page is on music.youtube.com, so it can ask
+  // YouTube's API directly, same-origin: measured 70 timed lines where the web
+  // client returned none. If that ever fails, fall back to the web client:
+  // plain lyrics, but lyrics rather than an error.
+  private async fetchBrowse(browseId: string): Promise<BrowseData> {
+    try {
+      const res = await fetch('/youtubei/v1/browse?prettyPrint=false', {
+        headers,
+        method: 'POST',
+        body: JSON.stringify({
+          browseId,
+          context: { client },
+        }),
+      });
+      if (!res.ok) throw new Error(`browse answered ${res.status}`);
+      return (await res.json()) as BrowseData;
+    } catch (error) {
+      const app = document.querySelector<MusicPlayerAppElement>('ytmusic-app');
+      if (!app) throw error;
+      console.warn('[synced-lyrics] timed lyrics request failed, using the web client:', error);
+      return app.networkManager.fetch<BrowseData, { browseId: string }>(
+        '/browse?prettyPrint=false',
+        { browseId },
+      );
+    }
   }
 }
 

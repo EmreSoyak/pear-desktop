@@ -15,3 +15,7 @@ node_modules
 .vite-inspect
 
 .DS_Store
+
+# Local only (fork): work in progress, throwaway and test material, and the docs
+/z_wip
+/docs
