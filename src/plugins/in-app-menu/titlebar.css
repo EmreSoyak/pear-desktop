@@ -34,20 +34,22 @@ ytmusic-app-layout > [slot='nav-bar'],
     var(--ytmusic-nav-bar-height) + var(--menu-bar-height, 36px)
   ) !important;
 }
-ytmusic-app[is-bauhaus-sidenav-enabled] #guide-spacer.ytmusic-app,
-ytmusic-app[is-bauhaus-sidenav-enabled] #mini-guide-spacer.ytmusic-app {
+/* YouTube dropped the is-bauhaus-sidenav-enabled attribute (2026-10) while
+   keeping the sidenav, so these no longer depend on it */
+ytmusic-app #guide-spacer.ytmusic-app,
+ytmusic-app #mini-guide-spacer.ytmusic-app {
   margin-top: calc(
     var(--ytmusic-nav-bar-height) + var(--menu-bar-height, 36px)
   ) !important;
 }
 
 @media (max-width: 935px) {
-  ytmusic-app[is-bauhaus-sidenav-enabled] #guide-spacer.ytmusic-app {
+  ytmusic-app #guide-spacer.ytmusic-app {
     margin-top: calc(
       var(--menu-bar-height, 36px)
     ) !important;
   }
-  ytmusic-app[is-bauhaus-sidenav-enabled] #mini-guide-spacer.ytmusic-app {
+  ytmusic-app #mini-guide-spacer.ytmusic-app {
     margin-top: calc(
       var(--ytmusic-nav-bar-height) + var(--menu-bar-height, 36px)
     ) !important;

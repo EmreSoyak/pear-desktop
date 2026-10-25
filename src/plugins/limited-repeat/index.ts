@@ -7,6 +7,12 @@ import {
   getProgressBar,
   isNewPlayerBar,
 } from '@/providers/dom-elements';
+import {
+  getSongDuration,
+  getSongTime,
+  getVideo,
+  seekSong,
+} from '@/providers/song-time';
 
 import type { MusicPlayer } from '@/types/music-player';
 import type { VideoDataChanged } from '@/types/video-data-changed';
@@ -35,6 +41,11 @@ const FINE_WINDOW_SECONDS = 1;
 const FINE_TICK_MS = 25;
 // Smallest allowed gap between the two markers.
 const MIN_RANGE_SECONDS = 0.5;
+// Songs play gapless, so the player hands off to the next track about 0.3s
+// before the end, and `ended` never fires. A loop ending at the song's end
+// therefore turns around this early, which covers the handoff plus a
+// throttled timer tick (250ms while hidden, LESSONS #15).
+const END_GUARD_SECONDS = 0.75;
 // How often the marker overlay re-measures the progress bar.
 const LAYOUT_TICK_MS = 400;
 
@@ -208,18 +219,13 @@ export default createPlugin<
     keyDownListener: ((e: KeyboardEvent) => void) | null;
     keyUpListener: ((e: KeyboardEvent) => void) | null;
     blurListener: (() => void) | null;
-    timeUpdateListener: (() => void) | null;
-    seekedListener: (() => void) | null;
-    endedListener: (() => void) | null;
-    playListener: (() => void) | null;
-    durationListener: (() => void) | null;
-    hookedVideo: HTMLVideoElement | null;
+    mediaListener: ((e: Event) => void) | null;
     repeatModeUnsubscribe: (() => void) | null;
 
     log: (msg: string) => void;
     injectStyle: () => void;
-    getVideo: () => HTMLVideoElement | null;
     getDuration: () => number;
+    getLoopEnd: () => number | null;
     getRepeatButton: () => HTMLElement | null;
     getProgressBar: () => HTMLElement | null;
     getTrack: () => { left: number; width: number } | null;
@@ -241,9 +247,11 @@ export default createPlugin<
     publishState: () => void;
     onPointerDown: (event: PointerEvent) => void;
     setGrabMode: (on: boolean) => void;
-    hookVideo: () => void;
-    unhookVideo: () => void;
+    listenToMedia: () => void;
+    unlistenToMedia: () => void;
+    onMediaEvent: (event: Event) => void;
     onTimeUpdate: () => void;
+    onPlay: () => void;
     startFineTimer: () => void;
     clearFineTimer: () => void;
     jumpToA: (forcePlay?: boolean) => void;
@@ -294,12 +302,7 @@ export default createPlugin<
     keyDownListener: null,
     keyUpListener: null,
     blurListener: null,
-    timeUpdateListener: null,
-    seekedListener: null,
-    endedListener: null,
-    playListener: null,
-    durationListener: null,
-    hookedVideo: null,
+    mediaListener: null,
     repeatModeUnsubscribe: null,
 
     async start({ getConfig }) {
@@ -314,7 +317,7 @@ export default createPlugin<
       this.createOverlay();
       this.watchRepeatMode();
       this.watchPlayerBar();
-      this.hookVideo();
+      this.listenToMedia();
 
       // Spends LR when another player-bar control is used.
       this.pointerListener = (event: PointerEvent) => this.onPointerDown(event);
@@ -325,7 +328,6 @@ export default createPlugin<
       this.videoDataListener = ((event: CustomEvent<VideoDataChanged>) => {
         if (event.detail.name === 'dataloaded') {
           this.cancel('song-changed');
-          this.hookVideo();
         }
       }) as EventListener;
       document.addEventListener('videodatachange', this.videoDataListener);
@@ -379,7 +381,7 @@ export default createPlugin<
         window.removeEventListener('blur', this.blurListener);
         this.blurListener = null;
       }
-      this.unhookVideo();
+      this.unlistenToMedia();
       this.clearBarMask();
       this.button?.remove();
       this.overlay?.remove();
@@ -408,13 +410,31 @@ export default createPlugin<
       document.head.appendChild(style);
     },
 
-    getVideo(): HTMLVideoElement | null {
-      return document.querySelector('video');
+    // The time scale the markers are drawn on. On the new bar that is the
+    // bar's own `max` (whole seconds, rounded up from the song's length): it
+    // is what the red line and a click on the bar map to, so the markers line
+    // up with both. Otherwise the song's length from the player API - never
+    // the video element's, which spans the whole gapless stream
+    // (see src/providers/song-time.ts).
+    getDuration(): number {
+      const bar = this.getProgressBar();
+      if (isNewPlayerBar() && bar instanceof HTMLInputElement) {
+        const max = Number(bar.max);
+        if (Number.isFinite(max) && max > 0) return max;
+      }
+      return getSongDuration();
     },
 
-    getDuration(): number {
-      const duration = this.getVideo()?.duration ?? 0;
-      return Number.isFinite(duration) && duration > 0 ? duration : 0;
+    // Where the loop actually turns around: B, or just before the song's
+    // real end when B sits there (END_GUARD_SECONDS).
+    getLoopEnd(): number | null {
+      if (this.pointB === null) return null;
+      const duration = getSongDuration();
+      if (duration <= 0) return this.pointB;
+      return Math.max(
+        this.pointA + MIN_RANGE_SECONDS / 2,
+        Math.min(this.pointB, duration - END_GUARD_SECONDS),
+      );
     },
 
     getRepeatButton(): HTMLElement | null {
@@ -702,13 +722,10 @@ export default createPlugin<
         this.updateBadge();
 
         // Now that the range is settled, drop into it if playback is outside.
-        const video = this.getVideo();
-        const b = this.pointB ?? duration;
-        if (
-          video &&
-          !video.paused &&
-          (video.currentTime < this.pointA || video.currentTime >= b)
-        ) {
+        const video = getVideo();
+        const end = this.getLoopEnd() ?? duration;
+        const current = getSongTime();
+        if (video && !video.paused && (current < this.pointA || current >= end)) {
           this.jumpToA();
         }
       };
@@ -890,87 +907,79 @@ export default createPlugin<
 
     // --- The loop itself ---
 
-    hookVideo() {
-      const video = this.getVideo();
-      if (!video || video === this.hookedVideo) return;
-
-      this.unhookVideo();
-
-      this.timeUpdateListener = () => this.onTimeUpdate();
-      this.seekedListener = () => this.onSeeked();
-      this.endedListener = () => {
-        if (this.lrActive && this.pointB !== null) {
-          // `ended` is never a deliberate pause, so always resume here.
-          this.jumpToA(true);
-        }
-      };
-      // Pressing play outside the loop starts it at A.
-      this.playListener = () => {
-        if (!this.lrActive || this.pointB === null) return;
-        const current = video.currentTime;
-        if (current < this.pointA || current >= this.pointB) {
-          this.jumpToA();
-        }
-      };
-      // The duration is often unknown at the moment LR is armed.
-      this.durationListener = () => {
-        if (this.lrActive && this.pointB === null) {
-          const duration = this.getDuration();
-          if (duration > 0) {
-            this.pointB = duration;
-            this.layoutOverlay();
-          }
-        }
-      };
-
-      video.addEventListener('timeupdate', this.timeUpdateListener);
-      video.addEventListener('seeked', this.seekedListener);
-      video.addEventListener('ended', this.endedListener);
-      video.addEventListener('play', this.playListener);
-      video.addEventListener('durationchange', this.durationListener);
-      this.hookedVideo = video;
+    listenToMedia() {
+      if (this.mediaListener) return;
+      // On the document, in the capture phase: media events don't bubble, and
+      // YouTube replaces the <video> element at some song changes, which would
+      // silently strand listeners attached to the old one.
+      this.mediaListener = (event: Event) => this.onMediaEvent(event);
+      for (const type of ['timeupdate', 'seeked', 'ended', 'play']) {
+        document.addEventListener(type, this.mediaListener, true);
+      }
     },
 
-    unhookVideo() {
-      const video = this.hookedVideo;
-      if (!video) return;
-      if (this.timeUpdateListener) {
-        video.removeEventListener('timeupdate', this.timeUpdateListener);
+    unlistenToMedia() {
+      if (!this.mediaListener) return;
+      for (const type of ['timeupdate', 'seeked', 'ended', 'play']) {
+        document.removeEventListener(type, this.mediaListener, true);
       }
-      if (this.seekedListener) {
-        video.removeEventListener('seeked', this.seekedListener);
+      this.mediaListener = null;
+    },
+
+    onMediaEvent(event: Event) {
+      if (event.target !== getVideo()) return;
+      switch (event.type) {
+        case 'timeupdate':
+          this.onTimeUpdate();
+          break;
+        case 'seeked':
+          this.onSeeked();
+          break;
+        case 'play':
+          this.onPlay();
+          break;
+        case 'ended':
+          // Only the last track of a stream still ends. Never a deliberate
+          // pause, so always resume.
+          if (this.lrActive && this.pointB !== null) this.jumpToA(true);
+          break;
       }
-      if (this.endedListener) {
-        video.removeEventListener('ended', this.endedListener);
+    },
+
+    // Pressing play outside the loop starts it at A.
+    onPlay() {
+      const end = this.getLoopEnd();
+      if (!this.lrActive || end === null) return;
+      const current = getSongTime();
+      if (current < this.pointA || current >= end) {
+        this.jumpToA();
       }
-      if (this.playListener) {
-        video.removeEventListener('play', this.playListener);
-      }
-      if (this.durationListener) {
-        video.removeEventListener('durationchange', this.durationListener);
-      }
-      this.timeUpdateListener = null;
-      this.seekedListener = null;
-      this.endedListener = null;
-      this.playListener = null;
-      this.durationListener = null;
-      this.hookedVideo = null;
     },
 
     onTimeUpdate() {
-      if (!this.lrActive || this.pointB === null || this.dragging) return;
+      if (!this.lrActive || this.dragging) return;
 
-      const video = this.getVideo();
-      if (!video || video.paused) return;
+      // The song's length is often unknown at the moment LR is armed.
+      if (this.pointB === null) {
+        const duration = this.getDuration();
+        if (duration <= 0) return;
+        this.pointB = duration;
+        this.layoutOverlay();
+      }
 
-      if (video.currentTime >= this.pointB) {
+      const video = getVideo();
+      const end = this.getLoopEnd();
+      if (!video || video.paused || end === null) return;
+
+      const current = getSongTime();
+      if (current >= end) {
         this.jumpToA();
         return;
       }
 
       // `timeupdate` alone overshoots B by up to 250ms, which is audible on a
       // tight loop - hand off to a fine timer for the last second.
-      if (this.pointB - video.currentTime <= FINE_WINDOW_SECONDS) {
+      if (end - current <= FINE_WINDOW_SECONDS) {
         this.startFineTimer();
       }
     },
@@ -978,22 +987,21 @@ export default createPlugin<
     startFineTimer() {
       if (this.fineTimer) return;
       this.fineTimer = setInterval(() => {
-        if (!this.lrActive || this.pointB === null || this.dragging) {
+        const end = this.getLoopEnd();
+        if (!this.lrActive || end === null || this.dragging) {
           this.clearFineTimer();
           return;
         }
-        const video = this.getVideo();
+        const video = getVideo();
         if (!video) {
           this.clearFineTimer();
           return;
         }
         if (video.paused) return;
-        if (video.currentTime >= this.pointB) {
+        const current = getSongTime();
+        if (current >= end) {
           this.jumpToA();
-        } else if (
-          this.pointB - video.currentTime >
-          FINE_WINDOW_SECONDS * 1.5
-        ) {
+        } else if (end - current > FINE_WINDOW_SECONDS * 1.5) {
           // Moved away from B (a seek, or the loop already wrapped).
           this.clearFineTimer();
         }
@@ -1008,15 +1016,16 @@ export default createPlugin<
     },
 
     jumpToA(forcePlay = false) {
-      const video = this.getVideo();
+      const video = getVideo();
       if (!video) return;
 
       const wasPlaying = !video.paused;
 
       this.clearFineTimer();
       this.selfSeek = true;
-      // Setting `currentTime` directly is tighter than `api.seekTo` here.
-      video.currentTime = this.pointA;
+      // Song time, through the player API: a raw `currentTime = A` lands in an
+      // earlier track of the gapless stream, or skips to the next one.
+      seekSong(this.pointA);
 
       // Only resume if playback was actually running - a deliberate pause must
       // not be undone by the loop.
@@ -1032,14 +1041,12 @@ export default createPlugin<
         this.selfSeek = false;
         return;
       }
-      if (!this.lrActive || this.pointB === null) return;
-
-      const video = this.getVideo();
-      if (!video) return;
+      const end = this.getLoopEnd();
+      if (!this.lrActive || end === null) return;
 
       // Seeking past the end of the loop drops straight back to A. Seeking
       // before A is left alone - it just plays in until the loop catches it.
-      if (video.currentTime > this.pointB) {
+      if (getSongTime() > end) {
         this.jumpToA();
       }
     },

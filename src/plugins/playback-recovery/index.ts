@@ -1,5 +1,6 @@
 import { createPlugin } from '@/utils';
 import { t } from '@/i18n';
+import { getSongTime } from '@/providers/song-time';
 
 import type { MusicPlayer } from '@/types/music-player';
 
@@ -271,8 +272,10 @@ export default createPlugin<
       );
       this.recovering = true;
 
-      const video = this.getVideo();
-      const currentTime = video?.currentTime ?? 0;
+      // `api.seekTo` takes song time. The video element's clock runs across
+      // the whole gapless stream, so seeking to it skipped past the song end
+      // on any track but the first (see src/providers/song-time.ts).
+      const currentTime = getSongTime();
 
       // Strategy 1: Try seeking to current position (forces buffer reload)
       if (this.consecutiveFailures <= 2) {

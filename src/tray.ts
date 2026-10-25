@@ -11,7 +11,7 @@ import * as config from './config';
 import { restart } from './providers/app-controls';
 import { registerCallback, SongInfoEvent } from './providers/song-info';
 import { getSongControls } from './providers/song-controls';
-import { showOnCurrentDesktop } from './window-utils';
+import { showWindow } from './window-utils';
 
 import { APPLICATION_NAME, t } from '@/i18n';
 
@@ -70,6 +70,10 @@ export const setTrayOnMouseMove = (fn: MouseMoveEvent) => {
 
 export const getTrayBounds = () => tray?.getBounds();
 
+// Diagnostics: -1 means no tray, 0 means the hover handler was lost
+export const getTrayMouseMoveListenerCount = () =>
+  tray ? tray.listenerCount('mouse-move') : -1;
+
 export const setUpTray = (app: Electron.App, win: Electron.BrowserWindow) => {
   if (!config.get('options.tray')) {
     tray = undefined;
@@ -113,11 +117,7 @@ export const setUpTray = (app: Electron.App, win: Electron.BrowserWindow) => {
       win.hide();
       app.dock?.hide();
     } else {
-      if (config.get('options.trayMoveToCurrentDesktop')) {
-        showOnCurrentDesktop(win);
-      } else {
-        win.show();
-      }
+      showWindow(win);
       app.dock?.show();
     }
   });
@@ -144,11 +144,7 @@ export const setUpTray = (app: Electron.App, win: Electron.BrowserWindow) => {
     {
       label: t('main.tray.show'),
       click() {
-        if (config.get('options.trayMoveToCurrentDesktop')) {
-          showOnCurrentDesktop(win);
-        } else {
-          win.show();
-        }
+        showWindow(win, { focus: true });
         app.dock?.show();
       },
     },

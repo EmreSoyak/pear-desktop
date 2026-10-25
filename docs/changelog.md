@@ -5,7 +5,32 @@ These are changes on top of upstream (merge-base
 $(git merge-base master origin/master)..master` plus uncommitted work.
 Upstream's own history is in [`../changelog.md`](../changelog.md).
 
-## 2026-10-01 · YouTube player-bar redesign, English pin (uncommitted at time of writing)
+## 2026-10-25 · Gapless timeline, seek bar, layout, one plugin per feature (uncommitted at time of writing)
+
+**Trigger.** About a week after the redesign, YouTube changed the page again,
+with no app update:
+- LR's brackets slid back and LR dissolved at the end of the song;
+- the seek bar was nearly impossible to grab;
+- the left guide sat under the header;
+- the tray hover card still died after a while.
+
+| Change | Files |
+|---|---|
+| Song-relative time on the gapless player: read via the player API, length from `seekableEnd`, seek with `api.seekTo` | `src/providers/song-time.ts` (new), `src/types/music-player.ts` |
+| LR on song time, document-level media listeners (the `<video>` is replaced at some song changes), 0.75s end guard before the gapless handoff, markers on the bar's own `max` | `src/plugins/limited-repeat/index.ts` |
+| Elapsed-time / seeked / play-paused feeds and `lengthSeconds` on song time, document-level listeners | `src/providers/song-info-front.ts` |
+| Recovery seeks used stream time (would skip tracks on track 2+) | `src/plugins/playback-recovery/index.ts` |
+| New plugin: 21px seek-bar grab area, grows on hover, no text selection, steps back for the volume popup | `src/plugins/seekbar-grab/` |
+| New plugin: Up Next panel flush right | `src/plugins/player-layout/` |
+| Left guide 32px too high: YouTube dropped `is-bauhaus-sidenav-enabled`, the in-app-menu offset rules no longer matched | `src/plugins/in-app-menu/titlebar.css` |
+| Tray hover: diagnostic logger finally in an installed build, self-heal (logged first) | `src/plugins/tray-hover/popup.ts`, `hover-debug.ts` |
+| **Restructure:** tray hover → plugin `tray-hover` (out of `notifications`); virtual desktop → plugin `virtual-desktop` (core keeps `showWindow` / `setShowWindowHandler`); English pin → plugin `english-interface` (out of `providers/` + `index.ts`) | `src/plugins/{tray-hover,virtual-desktop,english-interface}/`, `src/window-utils.ts`, `src/tray.ts`, `src/index.ts`, `src/menu.ts`, `src/config/defaults.ts`, notifications plugin |
+| Settings carried over: `migrateForkSettings` (unversioned, idempotent) | `src/config/store.ts` |
+| `options.autoUpdates` set to false in the user's config (it never did anything for the `dir` build) | user config (backup `config.json.bak-2026-10-25`) |
+| Harnesses: LR harness ported to API time, new gapless LR and seek-bar harnesses | `z_development/limited-repeat/tests/lr-newbar-test.cjs`, `lr-gapless-test.cjs`, `z_development/player-bar/tests/seekbar-grab-test.cjs` |
+| LESSONS #18–#21, docs | `z_development/LESSONS.md`, `docs/` |
+
+## 2026-10-01 · YouTube player-bar redesign, English pin
 
 **Trigger.** music.youtube.com replaced `ytmusic-player-bar` with
 `ytmusic-miniplayer`. LR vanished, and the UI turned Turkish. The app binary

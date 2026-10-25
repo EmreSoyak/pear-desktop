@@ -1,7 +1,7 @@
-# Virtual Desktop Awareness (`options.trayMoveToCurrentDesktop`)
+# Virtual Desktop Awareness (`virtual-desktop`)
 
-**Origin:** custom (Emre, 2026-04-15) · **Type:** core option (not a plugin) · **Default:** off
-**User config:** *not set*: the key is absent from `%APPDATA%\YouTube Music\config.json`, so the default (off) applies.
+**Origin:** custom (Emre, 2026-04-15; its own plugin since 2026-10-25, before that the core option `options.trayMoveToCurrentDesktop`)
+**Type:** main-process plugin · **Default:** off · **restartNeeded:** false · **User config:** off (never set)
 
 ## What it does
 
@@ -16,7 +16,7 @@ the view back to that desktop.
 
 ## How it works
 
-[`src/window-utils.ts`](../../src/window-utils.ts) `showOnCurrentDesktop(win)`:
+[`src/plugins/virtual-desktop/index.ts`](../../src/plugins/virtual-desktop/index.ts):
 
 ```ts
 win.setVisibleOnAllWorkspaces(true);  // appears on the current desktop
@@ -24,30 +24,36 @@ win.show();
 win.setVisibleOnAllWorkspaces(false); // stays there
 ```
 
-It is used in three places, each guarded by `config.get('options.trayMoveToCurrentDesktop')`:
+Core has one generic hook for it, in [`src/window-utils.ts`](../../src/window-utils.ts):
 
-| Where | File |
+| Core | Role |
 |---|---|
-| Tray click (show branch) | [`src/tray.ts`](../../src/tray.ts) |
-| Tray context menu "Show" | [`src/tray.ts`](../../src/tray.ts) |
-| `second-instance` handler | [`src/index.ts`](../../src/index.ts) |
+| `showWindow(win, { focus })` | how the app shows the main window. Default: `show()`, then `focus()` if asked |
+| `setShowWindowHandler(fn \| null)` | lets a plugin replace that. This plugin sets it in `start()` and clears it in `stop()` |
 
-Toggle: **Options → Tray → "Move to current virtual desktop on show"**
-([`src/menu.ts`](../../src/menu.ts),
-i18n `main.menu.options.submenu.tray.submenu.move-to-current-desktop`). Default
-in [`src/config/defaults.ts`](../../src/config/defaults.ts).
+`showWindow` is called from the tray click and the tray menu "Show" in
+[`src/tray.ts`](../../src/tray.ts), and from the `second-instance` handler in
+[`src/index.ts`](../../src/index.ts).
 
-## Related core change in the same commit: deferred tray handlers
+Toggle: **Plugins → Virtual Desktop Awareness** (it used to be Options → Tray →
+"Move to current virtual desktop on show").
 
-Plugins load (`loadAllMainPlugins`) **before** `setUpTray`. Before this change,
-`setTrayOnClick` / `setTrayOnDoubleClick` calls from plugins were silently
-dropped. [`src/tray.ts`](../../src/tray.ts) now queues them
-(`pendingClick` / `pendingDoubleClick` / `pendingMouseMove`) and applies them
-at the end of `setUpTray`. It also adds `setTrayOnMouseMove` and
-`getTrayBounds`, used by the [tray hover mini-player](tray-hover-mini-player.md).
+## Config
+
+| Key | Type | Default |
+|---|---|---|
+| `plugins.virtual-desktop.enabled` | boolean | false |
+
+`migrateForkSettings` ([`src/config/store.ts`](../../src/config/store.ts)) moves an old `options.trayMoveToCurrentDesktop` value here and deletes the old key.
+
+## Related core change from the same original commit: deferred tray handlers
+
+Plugins load (`loadAllMainPlugins`) **before** `setUpTray`.
+[`src/tray.ts`](../../src/tray.ts) queues `setTrayOnClick` / `setTrayOnDoubleClick` /
+`setTrayOnMouseMove` calls made before the tray exists and applies them at the
+end of `setUpTray`. The [tray hover mini-player](tray-hover-mini-player.md) relies on it.
 
 ## Gotchas
 
-- The same commit made DevTools open in dev mode only when `OPEN_DEVTOOLS` is
-  set ([`src/index.ts`](../../src/index.ts) `initTheme`).
+- Not verified across real virtual desktops after the 2026-10-25 move (the code path is unchanged; only where it lives moved).
 - New player bar (2026-10): **unaffected** (main process only).

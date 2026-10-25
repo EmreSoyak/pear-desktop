@@ -105,7 +105,10 @@ async function main() {
     await mouse('mouseReleased', toX, y, 0);
   };
   const state = () => evaluate(ws, 'window.__limitedRepeat');
-  const video = (expr) => evaluate(ws, `(() => { const v = document.querySelector('video'); return ${expr}; })()`);
+  // v = the video element, p = the player API. Read and seek song time through
+  // p: on the gapless player the element's clock runs across the whole stream,
+  // so on any track but the first v.currentTime is not the song's time.
+  const video = (expr) => evaluate(ws, `(() => { const v = document.querySelector('#movie_player video'); const p = document.querySelector('#movie_player'); return ${expr}; })()`);
   const centre = (selector) =>
     evaluate(ws, `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, left: r.left, width: r.width, height: r.height }; })()`);
   const repeatMode = () => evaluate(ws, `document.querySelector('#queue').queue.store.getState().queue.repeatMode`);
@@ -115,7 +118,9 @@ async function main() {
   if ((await state())?.active) await evaluate(ws, `document.getElementById('limited-repeat-button').click()`);
   await video('v.play().then(() => true)');
   await sleep(500);
-  const duration = await video('v.duration');
+  // The scale LR draws on and the bar seeks by: the bar's own max
+  const duration = await video(`+document.querySelector('input.ytMusicMiniPlayerProgressBar').max`);
+  console.log(`track: ${await video('p.getVideoData().title')}, stream offset ${(await video('v.currentTime - p.getCurrentTime()')).toFixed(1)}s (0 = first track of the stream; test a later one too)`);
   const bar = await centre('input.ytMusicMiniPlayerProgressBar');
   check('new seek bar present', !!bar, bar ? `width=${bar.width.toFixed(1)}` : '');
   // Click the bar's top row - YouTube's right-hand section overlaps its lower
@@ -127,14 +132,15 @@ async function main() {
   const sampleX = bar.left + bar.width * 0.3;
   // Start well away from the sample point, so a click that failed to seek
   // shows up as a wrong reading instead of passing by coincidence.
-  await video('(v.pause(), v.currentTime = 30, true)');
+  await video('(v.pause(), p.seekTo(30, true), true)');
   await sleep(800);
-  await evaluate(ws, `window.__lrSeeked = new Promise((r) => document.querySelector('video').addEventListener('seeked', () => r(true), { once: true })); true`);
+  await evaluate(ws, `window.__lrSeeked = new Promise((r) => document.querySelector('#movie_player video').addEventListener('seeked', () => r(true), { once: true })); true`);
   await click(sampleX, barY);
   const seeked = await evaluate(ws, `Promise.race([window.__lrSeeked, new Promise((r) => setTimeout(() => r(false), 4000))])`);
   await sleep(300);
-  const groundTruth = await video('v.currentTime');
-  check('ground-truth click seeked', seeked && Math.abs(groundTruth - 30) > 60, `t=${groundTruth.toFixed(2)}s`);
+  const groundTruth = await video('p.getCurrentTime()');
+  // Far enough from the 30s start that it can't be a failed seek, on any track length
+  check('ground-truth click seeked', seeked && Math.abs(groundTruth - 30) > duration * 0.1, `t=${groundTruth.toFixed(2)}s`);
   await video('v.play().then(() => true)');
   console.log(`ground truth: x=${sampleX.toFixed(1)} -> YouTube seeks to ${groundTruth.toFixed(2)}s (duration ${duration.toFixed(1)}s)`);
 
@@ -200,13 +206,13 @@ async function main() {
   check('click on the overlapped part of the bar keeps LR armed', (await state()).active === true, `landed on ${overlapTarget.split(' ')[0]}`);
 
   // --- The loop: playback wraps from B to A ---
-  await video(`(v.currentTime = ${s.a}, v.play().then(() => true))`);
+  await video(`(p.seekTo(${s.a}, true), v.play().then(() => true))`);
   let maxT = 0;
   let wrapped = false;
   let prev = 0;
   const deadline = Date.now() + (s.b - s.a + 6) * 1000;
   while (Date.now() < deadline) {
-    const t = await video('v.currentTime');
+    const t = await video('p.getCurrentTime()');
     if (t > maxT) maxT = t;
     if (prev > s.a + (s.b - s.a) / 2 && t < prev - 1) {
       wrapped = true;

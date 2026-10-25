@@ -59,6 +59,40 @@ store with `getState()` and `subscribe()`. It is the same object as
 `.next-button`, `ytmusic-menu-renderer.ytmusic-player-bar`,
 `.exit-fullscreen-button`.
 
+## The gapless media timeline (2026-10)
+
+Found 2026-10-25. YouTube now plays songs **gapless through one media stream**:
+
+| Value | First track | Later tracks |
+|---|---|---|
+| `video.currentTime` | song time | **stream time**: starts where the previous song ended (measured: 254s while the song was 35s in) |
+| `video.duration` | grows | the whole stream so far, **growing** as the next track buffers (328 → 371s on a 154s song) |
+| `api.getCurrentTime()` (`#movie_player`) | song time | song time |
+| `api.getDuration()` | | **what has loaded so far** while a track streams in (359 → 369s on a 392s track) |
+| `api.getProgressState().seekableEnd` | | the song's real length (392.1s), = `videoDetails.lengthSeconds` |
+| `input.ytMusicMiniPlayerProgressBar` `max` | | whole seconds, rounded up (393): what a click on the bar maps to |
+
+More traps:
+- The song change fires `videodatachange` `dataloaded` about 0.3s **before** the song's end (`html5_gapless_ended_transition_buffer_ms=200`), and `ended` doesn't fire.
+- YouTube **replaces the `<video>` element** at some song changes (seen going from a song to a music video). Listeners attached to the old element go silent.
+- Writing `video.currentTime` past what the stream has buffered clamps to the stream's end, and YouTube **skips to the next track**.
+
+**The rules** (helpers in [`src/providers/song-time.ts`](../src/providers/song-time.ts)):
+- read song time from the player API;
+- take the length from `seekableEnd`;
+- seek with `api.seekTo(s, true)` (measured exact to the millisecond, about 6ms);
+- listen for media events on the document in the capture phase (they don't bubble), filtered to the player's video;
+- for anything drawn on the seek bar, use the bar's own `max`.
+
+What was broken by this and fixed on 2026-10-25:
+- Limited Repeat: markers drifted, and the loop got spent at the end of the song.
+- playback-recovery's seeks.
+- The elapsed-time, seeked and play/pause feeds, plus `lengthSeconds`, in `song-info-front.ts`.
+
+Synced-lyrics already used `getCurrentTime()`. Upstream plugins that read `video.currentTime` (crossfade, skip-silences, sponsorblock, downloader, music-together, lumiastream) are off for this user and weren't changed.
+
+The timeline is player behaviour driven by server-side flags. It can't be pinned from the app.
+
 ## Helpers: [`src/providers/dom-elements.ts`](../src/providers/dom-elements.ts)
 
 Each helper prefers the new layout and falls back to the old one, because
@@ -136,6 +170,10 @@ Against the live app, 2026-10-01:
 - **YouTube rewrites the seek bar's `style` attribute** as it plays (that's how
   it draws the fill), so never put your own inline styles on it.
 - Seek-bar track geometry: inset 6px each side, half the 12px thumb (LESSONS #3).
+- **The bar is 3px tall.** Without the [seekbar-grab](custom/seekbar-grab.md) plugin it takes clicks in a 3px band on the left half and about 1px on the right. A drag that misses selects text.
+- **The volume popup** (`.ytMusicMiniPlayerVolumePopup`, z-index 10 inside the right section's z-index 2 context) reaches down over the bar, y=668–804 at an 864px viewport, with the slider at 684–788. Anything raised over the bar must step back while it's open (inline `display: flex`).
+- **Media time is not song time** on the gapless player (see [above](#the-gapless-media-timeline-2026-10)).
+- **Left guide offset** (with the in-app menu): YouTube dropped `ytmusic-app[is-bauhaus-sidenav-enabled]` while keeping the sidenav. in-app-menu's `titlebar.css` gated its 32px guide-spacer correction on that attribute, so the guide sat 32px too high: Home under the header, a gap at the bottom. Fixed 2026-10-25 by dropping the gate.
 
 ## When YouTube changes the bar again
 

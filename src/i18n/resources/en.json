@@ -144,7 +144,6 @@
               "disabled": "Disabled",
               "enabled-and-hide-app": "Enabled and hide app",
               "enabled-and-show-app": "Enabled and show app",
-              "move-to-current-desktop": "Move to current virtual desktop on show",
               "play-pause-on-click": "Play/Pause on click"
             }
           },
@@ -582,6 +581,10 @@
         "button": "Download"
       }
     },
+    "english-interface": {
+      "description": "Keeps the YouTube Music interface in English whatever your account's region, by pinning the language in YouTube's preference cookie",
+      "name": "English Interface"
+    },
     "equalizer": {
       "description": "Adds an equalizer to the player",
       "menu": {
@@ -699,7 +702,6 @@
           "label": "Interactive Settings",
           "submenu": {
             "hide-button-text": "Hide button text",
-            "hover-controls": "Show mini-player on tray hover",
             "refresh-on-play-pause": "Refresh on Play/Pause",
             "tray-controls": "Open/Close on tray click"
           }
@@ -750,6 +752,10 @@
       "templates": {
         "button": "Speed"
       }
+    },
+    "player-layout": {
+      "description": "Moves the Up Next / Lyrics panel flush against the right edge of the window instead of leaving a 56px gap",
+      "name": "Player Layout"
     },
     "precise-volume": {
       "description": "Control the volume precisely using mousewheel/hotkeys, with a custom HUD and customizable volume steps",
@@ -826,6 +832,10 @@
           }
         }
       }
+    },
+    "seekbar-grab": {
+      "description": "Makes the seek bar easy to grab: a 21px click and drag area instead of YouTube's 3px line, which also grows while you hover it",
+      "name": "Seek Bar Grab Area"
     },
     "shortcuts": {
       "description": "Allows setting global hotkeys for playback (play/pause/next/previous) and turning off media OSD by overriding media keys, turning on Ctrl/CMD + F to search, turning on Linux MPRIS support for media keys, and custom hotkeys for advanced users",
@@ -974,6 +984,10 @@
         }
       }
     },
+    "tray-hover": {
+      "description": "Hovering the tray icon shows a small card with the album art, title and previous / play-pause / next buttons",
+      "name": "Tray Hover Mini-Player"
+    },
     "tuna-obs": {
       "description": "Integration with OBS's plugin Tuna",
       "name": "Tuna OBS"
@@ -1008,6 +1022,10 @@
         "button-song": "Song",
         "button-video": "Video"
       }
+    },
+    "virtual-desktop": {
+      "description": "Showing the window from the tray (or by launching the app again) brings it to the virtual desktop you are on, instead of switching you to the one where it lives",
+      "name": "Virtual Desktop Awareness"
     },
     "visualizer": {
       "description": "Adds a visualizer to the player",

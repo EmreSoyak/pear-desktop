@@ -1,6 +1,6 @@
 {
-  "$comment": "Map of the codebase. Start here, then open the linked doc. Regenerate/keep in sync when changing a plugin.",
-  "generated": "2026-10-01",
+  "$comment": "Map of the codebase. Start here, then open the linked doc. Regenerate/keep in sync when changing a plugin. Since 2026-10-25 every custom feature is its own plugin folder under src/plugins/<id>/ (auto-discovered, toggled from the Plugins menu); shared readers live in src/providers/.",
+  "generated": "2026-10-25",
   "repo": "Z:/z_youtube_player (fork of th-ch/youtube-music a.k.a. pear-desktop; push to remote \"fork\", never \"origin\")",
   "readFirst": [
     "z_development/LESSONS.md",
@@ -17,7 +17,7 @@
     },
     {
       "path": "docs/player-bar.md",
-      "covers": "YouTube player-bar DOM (new ytmusic-miniplayer + old ytmusic-player-bar), dom-elements.ts helpers, how controls/feeds were ported, traps"
+      "covers": "YouTube player-bar DOM (new ytmusic-miniplayer + old ytmusic-player-bar), dom-elements.ts helpers, how controls/feeds were ported, traps; the gapless media timeline (video time is not song time) and src/providers/song-time.ts"
     },
     {
       "path": "docs/dev-tooling.md",
@@ -61,20 +61,28 @@
     },
     {
       "path": "docs/custom/virtual-desktop.md",
-      "covers": "Virtual Desktop Awareness"
+      "covers": "Virtual Desktop Awareness (plugin virtual-desktop)"
     },
     {
       "path": "docs/custom/tray-hover-mini-player.md",
-      "covers": "Tray Hover Mini-Player"
+      "covers": "Tray Hover Mini-Player (plugin tray-hover)"
     },
     {
       "path": "docs/custom/interface-language.md",
-      "covers": "Interface Language Pinned to English"
+      "covers": "English Interface (plugin english-interface)"
+    },
+    {
+      "path": "docs/custom/seekbar-grab.md",
+      "covers": "Seek Bar Grab Area (plugin seekbar-grab)"
+    },
+    {
+      "path": "docs/custom/player-layout.md",
+      "covers": "Player Layout (plugin player-layout)"
     }
   ],
   "userState": {
     "configFile": "%APPDATA%/YouTube Music/config.json",
-    "snapshotAt": "2026-10-01",
+    "snapshotAt": "2026-10-25",
     "enabledPlugins": [
       "notifications",
       "video-toggle",
@@ -82,36 +90,57 @@
       "synced-lyrics",
       "taskbar-mediacontrol",
       "playback-recovery",
-      "limited-repeat"
+      "limited-repeat",
+      "tray-hover",
+      "english-interface (default)",
+      "seekbar-grab (default)",
+      "player-layout (default)",
+      "in-app-menu (default on Windows)"
     ],
     "options": {
       "language": "en",
       "tray": true,
       "appVisible": false,
       "resumeOnStart": true,
-      "trayMoveToCurrentDesktop": "(unset -> default false)"
+      "autoUpdates": false
     },
-    "installedExe": "Z:/z_youtube_player/pack/win-unpacked/YouTube Music.exe (taskbar pin + Start Menu point here)"
+    "installedExe": "Z:/z_youtube_player/pack/win-unpacked/YouTube Music.exe (taskbar pin + Start Menu point here)",
+    "plugins.virtual-desktop": "(unset -> default off)",
+    "configBackup": "%APPDATA%/YouTube Music/config.json.bak-2026-10-25 (before autoUpdates=false and the plugin migration)"
   },
   "playerBar": {
     "doc": "docs/player-bar.md",
     "helpers": "src/providers/dom-elements.ts",
     "current": "ytmusic-miniplayer (since 2026-10-01)",
     "legacy": "ytmusic-player-bar",
-    "appStore": "document.querySelector('#queue').queue.store  (getState/subscribe)"
+    "appStore": "document.querySelector('#queue').queue.store  (getState/subscribe)",
+    "timeline": "gapless: one media stream across songs. video.currentTime/duration are stream time; read song time from #movie_player getCurrentTime() and getProgressState().seekableEnd, seek with seekTo(s, true). Helpers: src/providers/song-time.ts",
+    "seekBarScale": "input.ytMusicMiniPlayerProgressBar max (whole seconds, ceil of the song length) is what clicks map to"
   },
   "tests": [
     {
       "path": "z_development/player-bar/tests/core-ipc-test.cjs",
       "needs": "--remote-debugging-port=9222 --inspect=9229, fresh session",
       "covers": "core IPC controls + state feeds",
-      "lastResult": "18/18 (2026-10-01)"
+      "lastResult": "all passed (2026-10-25)"
     },
     {
       "path": "z_development/limited-repeat/tests/lr-newbar-test.cjs",
       "needs": "--remote-debugging-port=9222",
-      "covers": "LR on new bar",
-      "lastResult": "23/23 (2026-10-01)"
+      "covers": "LR on new bar; song time via the player API, prints the stream offset (run on a later track too)",
+      "lastResult": "23/23 at stream offset 188.8s (2026-10-25)"
+    },
+    {
+      "path": "z_development/limited-repeat/tests/lr-gapless-test.cjs",
+      "needs": "--remote-debugging-port=9222",
+      "covers": "LR loops near the song end on a non-first track; args <aFromEnd> <bFromEnd> <watchSeconds>",
+      "lastResult": "B at end: 4 loops, armed, markers fixed; B mid-song: 3 loops (2026-10-25)"
+    },
+    {
+      "path": "z_development/player-bar/tests/seekbar-grab-test.cjs",
+      "needs": "--remote-debugging-port=9222",
+      "covers": "real-mouse drags on the seek bar at -10..+10px, clicks inside the strip the right-hand section overlaps, no text selection, volume popup stays open",
+      "lastResult": "20/20 (2026-10-25); a run with the in-app menu panel open or the user moving the real mouse fails spuriously"
     },
     {
       "path": "z_development/limited-repeat/tests/lr-calib.cjs",
@@ -166,7 +195,7 @@
         "src/config/plugins.ts",
         "src/config/store.ts"
       ],
-      "summary": "electron-store at %APPDATA%\\YouTube Music\\config.json: every options.* key with default and reader, plugin config merge rule, migrations"
+      "summary": "electron-store at %APPDATA%\\YouTube Music\\config.json: every options.* key with default and reader, plugin config merge rule, migrations; migrateForkSettings (unversioned, idempotent) moves fork keys into their plugins"
     },
     {
       "id": "core-ipc",
@@ -200,9 +229,9 @@
         "src/providers/song-controls.ts",
         "src/providers/song-info.ts",
         "src/providers/song-info-front.ts",
-        "src/providers/youtube-language.ts"
+        "src/providers/song-time.ts"
       ],
-      "summary": "One section per provider: app controls, decorators, new/legacy player-bar DOM helpers and app store, protocol handler, SongInfo build and events, English PREF cookie pin"
+      "summary": "One section per provider: app controls, decorators, new/legacy player-bar DOM helpers and app store, protocol handler, SongInfo build and events, song-time (song-relative time on the gapless player)"
     },
     {
       "id": "core-tray-menu",
@@ -214,7 +243,7 @@
         "src/menu.ts",
         "src/window-utils.ts"
       ],
-      "summary": "Tray creation and queued click/double-click/mouse-move handlers, application menu and Options tree, virtual-desktop-aware show, custom features touching core"
+      "summary": "Tray creation and queued click/double-click/mouse-move handlers, application menu and Options tree, showWindow() with a plugin-replaceable show handler (used by virtual-desktop)"
     },
     {
       "id": "core-build",
@@ -255,7 +284,8 @@
       "origin": "custom",
       "summary": "A-B loop: LR button after Repeat drops draggable [ ] markers on the seek bar; disposable (spent by other controls, song change, repeat change).",
       "source": [
-        "src/plugins/limited-repeat/index.ts"
+        "src/plugins/limited-repeat/index.ts",
+        "src/providers/song-time.ts (shared)"
       ],
       "entryPoints": [
         "renderer",
@@ -276,16 +306,18 @@
         ".ytmusicPlayerControlsPlayPauseButton",
         "ytmusic-miniplayer",
         "#queue (store)",
-        "video"
+        "#movie_player (song time, seekTo)",
+        "video (play state; media events on document)"
       ],
       "globals": [
         "window.__limitedRepeatActive",
         "window.__limitedRepeat"
       ],
       "tests": [
-        "z_development/limited-repeat/tests/lr-newbar-test.cjs"
+        "z_development/limited-repeat/tests/lr-newbar-test.cjs",
+        "z_development/limited-repeat/tests/lr-gapless-test.cjs"
       ],
-      "newPlayerBarStatus": "ported 2026-10-01 - verified 23/23 live",
+      "newPlayerBarStatus": "ported 2026-10-01; gapless timeline fix 2026-10-25 - verified 23/23 at stream offset 188.8s",
       "userEnabled": true
     },
     {
@@ -323,9 +355,10 @@
       "domain": "custom",
       "doc": "docs/custom/playback-recovery.md",
       "origin": "custom",
-      "summary": "Watchdog (3s) detects dead/frozen/buffer-exhausted playback and escalates seek -> seek+1s -> next track; stands down while LR is active.",
+      "summary": "Watchdog (3s) detects dead/frozen/buffer-exhausted playback and escalates seek -> seek+1s -> next track; stands down while LR is active. Recovery seeks use song time (getSongTime) since 2026-10-25.",
       "source": [
-        "src/plugins/playback-recovery/index.ts"
+        "src/plugins/playback-recovery/index.ts",
+        "src/providers/song-time.ts (shared)"
       ],
       "entryPoints": [
         "renderer",
@@ -347,88 +380,150 @@
       "userEnabled": true
     },
     {
-      "id": "virtual-desktop",
-      "name": "Virtual Desktop Awareness",
-      "domain": "custom",
-      "doc": "docs/custom/virtual-desktop.md",
-      "origin": "custom",
-      "summary": "Option to show the window on the current virtual desktop (pin/unpin setVisibleOnAllWorkspaces); also deferred tray-handler queue.",
-      "source": [
-        "src/window-utils.ts",
-        "src/tray.ts",
-        "src/index.ts",
-        "src/menu.ts",
-        "src/config/defaults.ts"
-      ],
-      "entryPoints": [
-        "main"
-      ],
-      "configKeys": [
-        "options.trayMoveToCurrentDesktop"
-      ],
-      "defaultEnabled": false,
-      "restartNeeded": false,
-      "ipcChannels": [],
-      "domAnchors": [],
-      "newPlayerBarStatus": "unaffected",
-      "kind": "core-option"
-    },
-    {
-      "id": "tray-hover-mini-player",
+      "id": "tray-hover",
       "name": "Tray Hover Mini-Player",
       "domain": "custom",
       "doc": "docs/custom/tray-hover-mini-player.md",
       "origin": "custom",
-      "summary": "Hover the tray icon for a floating card with art, title, artist and prev/play/next; part of the notifications plugin.",
+      "summary": "Hover the tray icon for a floating card with art, title, artist and prev/play/next. Own plugin since 2026-10-25 (was inside notifications). Diagnostic log + self-heal.",
       "source": [
-        "src/plugins/notifications/hover-popup.ts",
-        "assets/hover-popup.html",
-        "src/plugins/notifications/main.ts",
-        "src/plugins/notifications/index.ts",
-        "src/plugins/notifications/menu.ts",
-        "src/plugins/notifications/interactive.ts",
-        "src/tray.ts"
+        "src/plugins/tray-hover/index.ts",
+        "src/plugins/tray-hover/popup.ts",
+        "src/plugins/tray-hover/popup.html",
+        "src/plugins/tray-hover/hover-debug.ts"
       ],
       "entryPoints": [
-        "main",
-        "menu"
+        "backend"
       ],
       "configKeys": [
-        "plugins.notifications.hoverControls"
+        "plugins.tray-hover.enabled"
       ],
       "defaultEnabled": true,
-      "restartNeeded": false,
+      "restartNeeded": true,
       "ipcChannels": [
         "peard:previous-video",
         "peard:next-video",
         "peard:toggle-play (via songControls.playPause)"
       ],
       "domAnchors": [],
-      "newPlayerBarStatus": "prev/next depended on old bar via renderer IPC - fixed 2026-10-01, verified",
-      "kind": "plugin-extension",
-      "parentPlugin": "notifications"
+      "coreHooks": [
+        "src/tray.ts setTrayOnMouseMove/getTrayBounds/getTrayMouseMoveListenerCount"
+      ],
+      "usedBy": [
+        "src/plugins/notifications/interactive.ts (isHoverPopupVisible, holds back toasts)"
+      ],
+      "log": "%APPDATA%/YouTube Music/logs/hover-popup.log",
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
     },
     {
-      "id": "interface-language",
-      "name": "Interface Language Pinned to English",
+      "id": "virtual-desktop",
+      "name": "Virtual Desktop Awareness",
       "domain": "custom",
-      "doc": "docs/custom/interface-language.md",
+      "doc": "docs/custom/virtual-desktop.md",
       "origin": "custom",
-      "summary": "Writes hl=en into the YouTube PREF cookie before load and re-asserts it on every PREF change.",
+      "summary": "Shows the window on the current virtual desktop (pin/unpin setVisibleOnAllWorkspaces) by installing a show handler in core showWindow(). Own plugin since 2026-10-25 (was options.trayMoveToCurrentDesktop).",
       "source": [
-        "src/providers/youtube-language.ts",
-        "src/index.ts"
+        "src/plugins/virtual-desktop/index.ts"
       ],
       "entryPoints": [
-        "main"
+        "backend"
       ],
-      "configKeys": [],
-      "defaultEnabled": true,
+      "configKeys": [
+        "plugins.virtual-desktop.enabled"
+      ],
+      "defaultEnabled": false,
       "restartNeeded": false,
       "ipcChannels": [],
       "domAnchors": [],
+      "coreHooks": [
+        "src/window-utils.ts setShowWindowHandler/showWindow (called by tray click, tray Show, second-instance)"
+      ],
       "newPlayerBarStatus": "unaffected",
-      "kind": "core-always-on"
+      "userEnabled": false
+    },
+    {
+      "id": "english-interface",
+      "name": "English Interface",
+      "domain": "custom",
+      "doc": "docs/custom/interface-language.md",
+      "origin": "custom",
+      "summary": "Writes hl=en into the YouTube PREF cookie before the page loads and re-asserts it on every PREF change. Own plugin since 2026-10-25 (was core).",
+      "source": [
+        "src/plugins/english-interface/index.ts",
+        "src/plugins/english-interface/pref-cookie.ts"
+      ],
+      "entryPoints": [
+        "backend"
+      ],
+      "configKeys": [
+        "plugins.english-interface.enabled"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": true,
+      "ipcChannels": [],
+      "domAnchors": [],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
+    },
+    {
+      "id": "seekbar-grab",
+      "name": "Seek Bar Grab Area",
+      "domain": "custom",
+      "doc": "docs/custom/seekbar-grab.md",
+      "origin": "custom",
+      "summary": "CSS: YouTube's 3px seek bar gets a 21px click/drag area (transparent padding, fill clipped to the 3px line, grows to 7px on hover), lifted above the right-hand section; no text selection in the player bar.",
+      "source": [
+        "src/plugins/seekbar-grab/index.ts",
+        "src/plugins/seekbar-grab/style.css"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.seekbar-grab.enabled"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "input.ytMusicMiniPlayerProgressBar",
+        ".ytMusicMiniPlayerProgressBarWrapper",
+        ".ytMusicMiniPlayerVolumePopup",
+        "ytmusic-miniplayer"
+      ],
+      "tests": [
+        "z_development/player-bar/tests/seekbar-grab-test.cjs"
+      ],
+      "newPlayerBarStatus": "new bar only",
+      "userEnabled": true
+    },
+    {
+      "id": "player-layout",
+      "name": "Player Layout",
+      "domain": "custom",
+      "doc": "docs/custom/player-layout.md",
+      "origin": "custom",
+      "summary": "CSS: pulls the Up Next / Lyrics side panel into the player page's 56px right padding, flush with the window edge, without widening the album art.",
+      "source": [
+        "src/plugins/player-layout/index.ts",
+        "src/plugins/player-layout/style.css"
+      ],
+      "entryPoints": [
+        "renderer"
+      ],
+      "configKeys": [
+        "plugins.player-layout.enabled"
+      ],
+      "defaultEnabled": true,
+      "restartNeeded": false,
+      "ipcChannels": [],
+      "domAnchors": [
+        "ytmusic-player-page .side-panel",
+        "--ytmusic-player-page-horizontal-padding"
+      ],
+      "newPlayerBarStatus": "unaffected",
+      "userEnabled": true
     }
   ],
   "plugins": [
@@ -1151,7 +1246,7 @@
       "name": "In-App Menu",
       "domain": "appearance-ui",
       "doc": "docs/plugins/appearance-ui.md#in-app-menu-in-app-menu",
-      "origin": "upstream",
+      "origin": "upstream-modified",
       "summary": "Frameless window with a custom HTML title bar rendering the app menu (and window controls on Linux).",
       "source": [
         "src/plugins/in-app-menu/index.ts",
@@ -1207,7 +1302,7 @@
         "ytmusic-guide-renderer",
         "ytmusic-player[player-ui-state='FULLSCREEN']"
       ],
-      "newPlayerBarStatus": "unaffected (caveat: titlebar.css:61 uses var(--ytmusic-player-bar-height) and :73 var(--ytmusic-player-page-player-bar-height), both unverified; if gone, the player-page height / mini-player transform calc() becomes invalid)",
+      "newPlayerBarStatus": "fixed 2026-10-25: YouTube dropped ytmusic-app[is-bauhaus-sidenav-enabled], so the guide-spacer offset rules no longer matched and the left guide sat 32px too high (Home under the header, gap at the bottom). Rules no longer gated on the attribute.",
       "userEnabled": null
     },
     {
@@ -2010,15 +2105,13 @@
       "domain": "system-controls",
       "doc": "docs/plugins/system-controls.md#notifications-notifications",
       "origin": "upstream-modified",
-      "summary": "Song-change desktop notifications (Linux urgency), Windows interactive toast XML with prev/play-pause/next protocol buttons in 7 styles and tray-click toggle; fork adds a tray hover mini-player.",
+      "summary": "Song-change desktop notifications (Linux urgency), Windows interactive toast XML with prev/play-pause/next protocol buttons in 7 styles and tray-click toggle. Holds back toasts while the tray-hover card is up.",
       "source": [
         "src/plugins/notifications/index.ts",
         "src/plugins/notifications/main.ts",
         "src/plugins/notifications/menu.ts",
         "src/plugins/notifications/interactive.ts",
-        "src/plugins/notifications/utils.ts",
-        "src/plugins/notifications/hover-popup.ts",
-        "assets/hover-popup.html"
+        "src/plugins/notifications/utils.ts"
       ],
       "entryPoints": [
         "main",
@@ -2032,8 +2125,7 @@
         "plugins.notifications.toastStyle",
         "plugins.notifications.refreshOnPlayPause",
         "plugins.notifications.trayControls",
-        "plugins.notifications.hideButtonText",
-        "plugins.notifications.hoverControls"
+        "plugins.notifications.hideButtonText"
       ],
       "defaultEnabled": false,
       "restartNeeded": true,

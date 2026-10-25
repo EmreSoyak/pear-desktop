@@ -39,8 +39,14 @@ is marked with `__pbRecovery`).
 
 | Attempt | Strategy |
 |---|---|
-| 1–2 | `api.seekTo(currentTime)` + `playVideo()` |
-| 3–4 | `api.seekTo(currentTime + 1)` + `playVideo()` |
+| 1–2 | `api.seekTo(songTime)` + `playVideo()` |
+| 3–4 | `api.seekTo(songTime + 1)` + `playVideo()` |
+
+`songTime` is `getSongTime()` from [`src/providers/song-time.ts`](../../src/providers/song-time.ts).
+Until 2026-10-25 this passed `video.currentTime`, which on YouTube's gapless
+player is stream time: on any track but the first it sought past the song's
+end and skipped the track. Health tracking still uses the element's clock,
+which is fine for "is it advancing".
 | more than `maxRetries` | `api.nextVideo()`, then a 5s grace period |
 
 ## Config

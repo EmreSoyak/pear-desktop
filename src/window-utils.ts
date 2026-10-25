@@ -1,12 +1,21 @@
-/**
- * Shows a window on the current virtual desktop instead of switching
- * to the desktop where the window was originally created.
- *
- * Works by temporarily pinning the window to all workspaces,
- * then unpinning it — leaving it on the current one.
- */
-export const showOnCurrentDesktop = (win: Electron.BrowserWindow) => {
-  win.setVisibleOnAllWorkspaces(true);
+import type { BrowserWindow } from 'electron';
+
+// How the main window is brought up when the app shows it (tray click, tray
+// menu "Show", a second instance). A plugin can replace it: the
+// virtual-desktop plugin shows the window on the current virtual desktop.
+type ShowWindowHandler = (win: BrowserWindow) => void;
+
+let showWindowHandler: ShowWindowHandler | null = null;
+
+export const setShowWindowHandler = (handler: ShowWindowHandler | null) => {
+  showWindowHandler = handler;
+};
+
+export const showWindow = (win: BrowserWindow, { focus = false } = {}) => {
+  if (showWindowHandler) {
+    showWindowHandler(win);
+    return;
+  }
   win.show();
-  win.setVisibleOnAllWorkspaces(false);
+  if (focus) win.focus();
 };

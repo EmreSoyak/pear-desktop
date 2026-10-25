@@ -1,0 +1,13 @@
+/*
+ * The player page pads both sides by --ytmusic-player-page-horizontal-padding
+ * (56px), leaving a gap between the Up Next panel and the window's right edge.
+ * Pull only the side panel into that gap: zeroing the page's own padding would
+ * widen the main panel too, and YouTube then crops the album art.
+ */
+
+ytmusic-player-page:not([is-mweb-modernization-enabled])
+  .side-panel.ytmusic-player-page {
+  margin-right: calc(
+    -1 * var(--ytmusic-player-page-horizontal-padding, 56px)
+  ) !important;
+}

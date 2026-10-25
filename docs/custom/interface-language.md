@@ -1,6 +1,7 @@
-# Interface Language Pinned to English
+# English Interface (`english-interface`)
 
-**Origin:** custom (2026-10-01) · **Type:** core, main process · **Always on** (no toggle)
+**Origin:** custom (2026-10-01; its own plugin since 2026-10-25, before that core code in `src/providers/youtube-language.ts` + `src/index.ts`)
+**Type:** main-process plugin · **Default:** on · **restartNeeded:** true
 
 ## What it does
 
@@ -16,28 +17,27 @@ had no `hl` key. Emre wants it to never change from English.
 
 ## How it works
 
-[`src/providers/youtube-language.ts`](../../src/providers/youtube-language.ts) exports `forceEnglishInterface(session)`, called from
-`createMainWindow` in [`src/index.ts`](../../src/index.ts) right before
-`loadURL`:
+[`src/plugins/english-interface/`](../../src/plugins/english-interface/):
 
-1. Reads the `PREF` cookie for `https://music.youtube.com`.
-2. If `hl` isn't `en`, sets it, keeping every other PREF key (`repeat`,
-   `volume`, `autoplay`, `guide_collapsed`, ...). It writes back with domain
-   `.youtube.com`, path `/`, `secure`, and a 2-year expiry.
-3. Subscribes once (module flag `watching`) to `session.cookies` `changed`.
-   Whenever YouTube rewrites PREF without `hl=en` (it rewrites PREF on any
-   preference change, and its language picker would set `hl`), the value is
-   put back.
-
-Failures are caught and logged ("Could not pin the interface language") so
-that a cookie error can never stop the app from loading.
+- `index.ts`: `backend.start({ window })` awaits `forceEnglishInterface(window.webContents.session)`, logging and swallowing any error so a cookie failure can never stop the app from loading. Main plugins start inside `createMainWindow` (`loadAllMainPlugins`, awaited) **before** `loadURL`, so the cookie is in place for the first request.
+- `pref-cookie.ts`: `forceEnglishInterface(session)`:
+  1. Reads the `PREF` cookie for `https://music.youtube.com`.
+  2. If `hl` isn't `en`, sets it, keeping every other PREF key (`repeat`, `volume`, `autoplay`, `guide_collapsed`, ...). It writes back with domain `.youtube.com`, path `/`, `secure`, and a 2-year expiry.
+  3. Subscribes once (module flag `watching`) to `session.cookies` `changed`. Whenever YouTube rewrites PREF without `hl=en` (it rewrites PREF on any preference change, and its language picker would set `hl`), the value is put back.
 
 `GL` (region) is deliberately left alone.
 
+## Config
+
+| Key | Type | Default |
+|---|---|---|
+| `plugins.english-interface.enabled` | boolean | true |
+
 ## Verified
 
-- With `hl=tr` planted in PREF before launch, the new build came up with `ytcfg HL=en`, `<html lang="en">`, and the repeat button titled "Repeat off".
-- With `hl=tr` written mid-session from the page, PREF was back to `hl=en` within 1.5s.
+- 2026-10-01: with `hl=tr` planted in PREF before launch, the build came up with `ytcfg HL=en`, `<html lang="en">`, and the repeat button titled "Repeat off".
+- 2026-10-01: with `hl=tr` written mid-session from the page, PREF was back to `hl=en` within 1.5s.
+- 2026-10-25, as a plugin: `hl=tr` planted from the main process was back to `en` within 1.5s, page `HL=en`, "Repeat off".
 
 ## Gotchas
 

@@ -1,5 +1,6 @@
 import { singleton } from './decorators';
 import { getAppStore, getPlayerBar } from './dom-elements';
+import { getSongDuration, getSongTime, getVideo } from './song-time';
 
 import { LikeType, type GetState } from '@/types/datahost-get-state';
 
@@ -28,11 +29,22 @@ window.ipcRenderer.on(
 // Used because 'loadeddata' or 'loadedmetadata' weren't firing on song start for some users (https://github.com/pear-devs/pear-desktop/issues/473)
 const srcChangedEvent = new CustomEvent('peard:src-changed');
 
+// Media listeners below sit on the document in the capture phase (media
+// events don't bubble), because YouTube replaces the <video> element at some
+// song changes. Times come from the player API: the element's own clock runs
+// across the whole gapless stream (see song-time.ts).
+const onPlayerVideo = (type: string, listener: () => void) =>
+  document.addEventListener(
+    type,
+    (event) => {
+      if (event.target === getVideo()) listener();
+    },
+    true,
+  );
+
 export const setupSeekedListener = singleton(() => {
-  document.querySelector('video')?.addEventListener('seeked', (v) => {
-    if (v.target instanceof HTMLVideoElement) {
-      window.ipcRenderer.send('peard:seeked', v.target.currentTime);
-    }
+  onPlayerVideo('seeked', () => {
+    window.ipcRenderer.send('peard:seeked', getSongTime());
   });
 });
 
@@ -57,10 +69,9 @@ export const setupTimeChangedListener = singleton(() => {
   // The new seek bar's `value` is a property, not an attribute, so there is
   // nothing to observe. Follow the video instead, once per whole second like
   // the old slider did.
-  const video = document.querySelector('video');
   let lastSecond = -1;
-  video?.addEventListener('timeupdate', () => {
-    const second = Math.floor(video.currentTime);
+  onPlayerVideo('timeupdate', () => {
+    const second = Math.floor(getSongTime());
     if (second === lastSecond) return;
     lastSecond = second;
     sendTime(second);
@@ -325,22 +336,21 @@ export const setupSongInfo = (api: MusicPlayer) => {
     setupSeekedListener();
   });
 
-  const playPausedHandler = (e: Event, status: string) => {
-    if (
-      e.target instanceof HTMLVideoElement &&
-      Math.round(e.target.currentTime) > 0
-    ) {
+  const playPausedHandler = (status: string) => {
+    const elapsed = getSongTime();
+    if (Math.round(elapsed) > 0) {
       window.ipcRenderer.send('peard:play-or-paused', {
         isPaused: status === 'pause',
-        elapsedSeconds: Math.floor(e.target.currentTime),
+        elapsedSeconds: Math.floor(elapsed),
       });
     }
   };
 
-  const playPausedHandlers = {
-    playing: (e: Event) => playPausedHandler(e, 'playing'),
-    pause: (e: Event) => playPausedHandler(e, 'pause'),
-  };
+  // Once, on the document: survives the <video> element being replaced, which
+  // per-element listeners re-added on `dataloaded` did not.
+  for (const status of ['playing', 'pause'] as const) {
+    onPlayerVideo(status, () => playPausedHandler(status));
+  }
 
   const videoEventDispatcher = async (
     name: string,
@@ -378,11 +388,6 @@ export const setupSongInfo = (api: MusicPlayer) => {
       const video = document.querySelector<HTMLVideoElement>('video');
       video?.dispatchEvent(srcChangedEvent);
 
-      for (const status of ['playing', 'pause'] as const) {
-        // for fix issue that pause event not fired
-        video?.addEventListener(status, playPausedHandlers[status]);
-      }
-
       clearVideoTimeout(videoData.videoId);
       waitingEvent.add(videoData.videoId);
 
@@ -401,10 +406,6 @@ export const setupSongInfo = (api: MusicPlayer) => {
   const video = document.querySelector('video');
 
   if (video) {
-    for (const status of ['playing', 'pause'] as const) {
-      video.addEventListener(status, playPausedHandlers[status]);
-    }
-
     if (!isNaN(video.duration)) {
       const {
         title,
@@ -422,7 +423,8 @@ export const setupSongInfo = (api: MusicPlayer) => {
         playlistId,
 
         isUpcoming: false,
-        lengthSeconds: video.duration,
+        // The element's duration spans the gapless stream, not this song.
+        lengthSeconds: getSongDuration() || video.duration,
         loading: true,
 
         ['\u0079\u0074\u006d\u0064WatchNextResponse']: watchNextResponse,

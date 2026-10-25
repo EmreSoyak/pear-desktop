@@ -275,3 +275,37 @@ export const store = new Store({
   clearInvalidConfig: false,
   migrations,
 });
+
+// Fork settings that moved when the custom features became plugins of their
+// own (2026-10). Runs on every launch but only acts while an old key is still
+// there, so it needs no version bump: the version-gated migrations above
+// never re-run for the version that is already installed.
+const migrateForkSettings = (store: IStore) => {
+  const moveToDesktop = store.get('options.trayMoveToCurrentDesktop') as
+    | boolean
+    | undefined;
+  if (moveToDesktop !== undefined) {
+    if (store.get('plugins.virtual-desktop') === undefined) {
+      store.set('plugins.virtual-desktop', { enabled: moveToDesktop });
+    }
+    store.delete('options.trayMoveToCurrentDesktop');
+  }
+
+  const notifications = store.get('plugins.notifications') as
+    | { enabled?: boolean; hoverControls?: boolean }
+    | undefined;
+  // The tray hover card used to run inside the notifications plugin, behind
+  // its `hoverControls` option
+  if (notifications && store.get('plugins.tray-hover') === undefined) {
+    store.set('plugins.tray-hover', {
+      enabled:
+        notifications.enabled === true && notifications.hoverControls !== false,
+    });
+  }
+  if (notifications && 'hoverControls' in notifications) {
+    const { hoverControls: _, ...rest } = notifications;
+    store.set('plugins.notifications', rest);
+  }
+};
+
+migrateForkSettings(store as unknown as IStore);

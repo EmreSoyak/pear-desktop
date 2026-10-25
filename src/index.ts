@@ -38,7 +38,6 @@ import { isTesting } from '@/utils/testing';
 import { setUpTray } from '@/tray';
 import { setupSongInfo } from '@/providers/song-info';
 import { restart, setupAppControls } from '@/providers/app-controls';
-import { forceEnglishInterface } from '@/providers/youtube-language';
 import {
   APP_PROTOCOL,
   handleProtocol,
@@ -55,7 +54,7 @@ import {
 } from '@/loader/main';
 
 import { LoggerPrefix } from '@/utils';
-import { showOnCurrentDesktop } from '@/window-utils';
+import { showWindow } from '@/window-utils';
 import { APPLICATION_NAME, loadI18n, setLanguage, t } from '@/i18n';
 
 import ErrorHtmlAsset from '@assets/error.html?asset';
@@ -515,10 +514,6 @@ async function createMainWindow() {
     }
   });
 
-  // Never let a cookie failure stop the app from loading.
-  await forceEnglishInterface(win.webContents.session).catch((error) =>
-    console.error(LoggerPrefix, 'Could not pin the interface language', error),
-  );
   win.webContents.loadURL(urlToLoad);
 
   return win;
@@ -793,14 +788,7 @@ app.whenReady().then(async () => {
       mainWindow.restore();
     }
 
-    if (config.get('options.trayMoveToCurrentDesktop')) {
-      showOnCurrentDesktop(mainWindow);
-    } else {
-      if (!mainWindow.isVisible()) {
-        mainWindow.show();
-      }
-      mainWindow.focus();
-    }
+    showWindow(mainWindow, { focus: true });
   });
 
   // Autostart at login

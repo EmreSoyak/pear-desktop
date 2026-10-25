@@ -1,0 +1,55 @@
+/*
+ * YouTube's seek bar (2026-10) is a 3px native range input, and on the right
+ * half of the window its own right-hand section covers the lower half of it,
+ * leaving about 1px that takes clicks there. A drag that misses it starts a
+ * text selection across the player bar or the page instead.
+ *
+ * Give the input transparent vertical padding: the line stays 3px (the fill is
+ * clipped to the content box) but the input takes clicks across 21px, and it
+ * is lifted above the right-hand section. The wrapper itself lets clicks
+ * through, so only the input's own box is in the way. Horizontal geometry is
+ * untouched: limited-repeat measures the track from it (6px thumb inset).
+ */
+
+ytmusic-miniplayer .ytMusicMiniPlayerProgressBarWrapper {
+  z-index: 10 !important;
+  pointer-events: none !important;
+}
+
+ytmusic-miniplayer input.ytMusicMiniPlayerProgressBar {
+  pointer-events: auto !important;
+  box-sizing: content-box !important;
+  height: 3px !important;
+  padding: 9px 0 !important;
+  /* Same layout footprint as before */
+  margin: -9px 0 !important;
+  /* YouTube draws the fill as an inline `background` shorthand, which resets
+     the clip - these win because they are !important */
+  background-clip: content-box !important;
+  background-origin: content-box !important;
+  transition:
+    height 0.12s ease,
+    padding 0.12s ease !important;
+}
+
+/* The volume popup lives in the right-hand section's stacking context and
+   reaches down over the bar. While it is open (YouTube toggles its inline
+   display), drop the bar back to YouTube's own stacking, or the raised hit
+   area would steal the bottom of the slider and close the popup on the way up
+   from the mute button. */
+ytmusic-miniplayer:has(.ytMusicMiniPlayerVolumePopup:not([style*='none']))
+  .ytMusicMiniPlayerProgressBarWrapper {
+  z-index: 1 !important;
+}
+
+/* Grows while hovered or dragged, same 21px footprint */
+ytmusic-miniplayer input.ytMusicMiniPlayerProgressBar:hover,
+ytmusic-miniplayer input.ytMusicMiniPlayerProgressBar:active {
+  height: 7px !important;
+  padding: 7px 0 !important;
+}
+
+/* A drag that starts just off the bar must not select the player bar's text */
+ytmusic-miniplayer {
+  user-select: none;
+}

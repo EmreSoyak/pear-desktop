@@ -10,8 +10,8 @@ bar.
 |---|---|
 | [index.json](index.json) | machine-readable map of everything below |
 | [architecture.md](architecture.md) | process model, boot sequence, plugin system, config, the **full IPC channel reference**, providers, tray/menu, build, types |
-| [player-bar.md](player-bar.md) | YouTube's player-bar DOM (new and old), the `dom-elements.ts` helpers, how every control and feed was ported in the 2026-10 redesign |
-| [custom/](custom/) | the features added in this fork: [limited-repeat](custom/limited-repeat.md), [audio-only](custom/audio-only.md), [playback-recovery](custom/playback-recovery.md), [virtual-desktop](custom/virtual-desktop.md), [tray-hover-mini-player](custom/tray-hover-mini-player.md), [interface-language](custom/interface-language.md) |
+| [player-bar.md](player-bar.md) | YouTube's player-bar DOM (new and old), the `dom-elements.ts` helpers, how every control and feed was ported in the 2026-10 redesign, and the **gapless media timeline** (video time is not song time; `song-time.ts`) |
+| [custom/](custom/) | the features added in this fork, **each its own plugin folder** under `src/plugins/<id>/`: [limited-repeat](custom/limited-repeat.md), [audio-only](custom/audio-only.md), [playback-recovery](custom/playback-recovery.md), [tray-hover](custom/tray-hover-mini-player.md), [virtual-desktop](custom/virtual-desktop.md), [english-interface](custom/interface-language.md), [seekbar-grab](custom/seekbar-grab.md), [player-layout](custom/player-layout.md) |
 | [plugins/](plugins/) | upstream plugins by domain: [playback-audio](plugins/playback-audio.md), [appearance-ui](plugins/appearance-ui.md), [integrations](plugins/integrations.md), [content-library](plugins/content-library.md), [system-controls](plugins/system-controls.md) |
 | [dev-tooling.md](dev-tooling.md) | build/install scripts, the safe build, CDP test harnesses, diagnostics, git remotes |
 | [changelog.md](changelog.md) | every change this fork made on top of upstream, with commits |

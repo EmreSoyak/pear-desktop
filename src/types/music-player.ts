@@ -353,7 +353,11 @@ export interface MusicPlayer {
    */
   setVolume: (volume: number) => void;
   getVolume: () => number;
-  seekTo: (seconds: number) => void;
+  /**
+   * @param seconds song-relative
+   * @param allowSeekAhead fetch from the server when not buffered
+   */
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   getPlayerMode: <Return>() => Return;
   /**
    * 1: playing

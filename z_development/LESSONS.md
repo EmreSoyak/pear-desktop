@@ -356,7 +356,55 @@ hidden.
 
 YouTube picks the UI language from `hl` in its `PREF` cookie and, without
 one, from the account region (Turkish here, even with `navigator.language`
-set to en-US). `src/providers/youtube-language.ts` writes `hl=en` into PREF
+set to en-US). `src/plugins/english-interface/pref-cookie.ts` writes `hl=en` into PREF
 before the first load, keeping the other PREF keys, and puts it back whenever
 PREF changes. To verify it, set `hl=tr` first: a cookie left over from earlier
 testing would otherwise make it pass by accident.
+
+## 18. Video time is not song time (the gapless player)
+
+Since about 2026-10-18 YouTube plays songs gapless through one media stream:
+- On the second track, `video.currentTime` starts where the first song ended.
+- `video.duration` grows as the next track buffers.
+
+Everything that read the element's clock broke from track 2 onwards, and
+everything had been **tested on track 1, where the offset is 0**. Limited
+Repeat's markers slid left and its loop got spent at the song's end. Recovery
+would have sought past the end, and the elapsed-time feed sent stream seconds.
+
+- Read song time from `#movie_player` `getCurrentTime()`. The length is
+  `getProgressState().seekableEnd`: `getDuration()` reports only what has
+  loaded while a track streams in. Seek with `seekTo(s, true)`. All of this is
+  in `src/providers/song-time.ts`.
+- **Never write `video.currentTime` to seek.** Past what is buffered, it clamps
+  to the stream's end and YouTube skips to the next track.
+- YouTube **replaces the `<video>` element** at some song changes, so listen
+  for media events on the document in the capture phase. Don't cache the element.
+- The song change (`dataloaded`) fires about 0.3s before the end, and `ended`
+  doesn't fire. Anything that must act "at the end" has to act earlier.
+- **Run every harness on a later track too.** `lr-newbar-test.cjs` prints the
+  stream offset, so 0 tells you you're on the first track.
+
+## 19. A CSS-only plugin needs a `renderer`
+
+The plugin importer lists a plugin for a process only if it has that section
+(`plg['renderer']`). A plugin with just `stylesheets:` is never loaded. Inject
+your own `<style id>` from `renderer.start()` and remove it in `stop()`. That
+also makes disabling it work without a restart, because adopted stylesheets
+are never removed.
+
+## 20. Config migrations here are version-gated
+
+`migrations` in `src/config/store.ts` run only when the app version moves past
+them. This fork doesn't bump the version, so a new `'>=3.11.0'` entry never
+runs. Moving a setting needs an idempotent step that runs every launch and
+acts only while the old key exists (`migrateForkSettings`).
+
+## 21. Lifting something over YouTube's player bar
+
+Raising the seek bar's wrapper above the right-hand section (z-index 2) also
+put it over the volume popup, which lives inside that section's stacking
+context and reaches down over the bar. The popup then closed on the way up
+from the mute button. After any z-index change near the bar, hit-test the
+volume popup's whole box, and walk the mouse from the mute button up to the
+slider with real input.

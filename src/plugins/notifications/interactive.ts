@@ -6,7 +6,7 @@ import nextIcon from '@assets/media-icons-black/next.png?asset&asarUnpack';
 import previousIcon from '@assets/media-icons-black/previous.png?asset&asarUnpack';
 
 import { notificationImage, secondsToMinutes, ToastStyles } from './utils';
-import { isHoverPopupVisible } from './hover-popup';
+import { isHoverPopupVisible } from '@/plugins/tray-hover/popup';
 
 import { getSongControls } from '@/providers/song-controls';
 import {

@@ -44,7 +44,7 @@ There is a single `BrowserWindow`. It uses `contextIsolation: true` and `sandbox
 | 18 | createMainWindow | `render-process-gone` → unresponsive dialog; `ready-to-show` → `show()` if `options.appVisible` | [index.ts:479-487](../src/index.ts#L479) |
 | 19 | createMainWindow | **CSP removal** (`removeContentSecurityPolicy`): strips CSP headers on https responses and adds `access-control-allow-origin: https://music.youtube.com` when absent; uses `electron-better-web-request` so plugins (e.g. adblocker) can add more `onHeadersReceived` listeners | [index.ts:489](../src/index.ts#L489), [:933-982](../src/index.ts#L933) |
 | 20 | createMainWindow | `dom-ready` (title-bar overlay height × zoom); `will-redirect` `/premium` → Google login workaround | [index.ts:491-516](../src/index.ts#L491) |
-| 21 | createMainWindow | **`forceEnglishInterface(session)`** (PREF cookie `hl=en`, errors swallowed), then `loadURL(resumeOnStart ? config.url : default url)` | [index.ts:427-429](../src/index.ts#L427), [:518-522](../src/index.ts#L518) |
+| 21 | createMainWindow | `loadURL(resumeOnStart ? config.url : default url)`. The English PREF-cookie pin now runs earlier, as the `english-interface` plugin's `backend.start` at step 15 (main plugins are awaited before this) | [index.ts](../src/index.ts), [plugins/english-interface](../src/plugins/english-interface/index.ts) |
 | 22 | whenReady | `setApplicationMenu` (runs `loadAllMenuPlugins`) then `refreshMenu` | [index.ts:763-764](../src/index.ts#L763) |
 | 23 | whenReady | **`setUpTray(app, mainWindow)`**, after main plugins, so the tray applies their queued handlers | [index.ts:765](../src/index.ts#L765), [tray.ts:191-207](../src/tray.ts#L191) |
 | 24 | whenReady | `setupProtocolHandler`; `second-instance` → protocol command (`youtubemusic://cmd args`) or restore/show (virtual-desktop aware) | [index.ts:767-804](../src/index.ts#L767) |
@@ -226,7 +226,6 @@ Plugin config storage: `plugins.<id>` holds only what has been written. The effe
 | `removeUpgradeButton` | `false` | CSS hide ([renderer.ts:414](../src/renderer.ts#L414)) |
 | `restartOnConfigChanges` | `false` | Auto-restart after menu option/plugin toggles |
 | `trayClickPlayPause` | `false` | Tray click = play/pause instead of show/hide ([tray.ts:110](../src/tray.ts#L110)) |
-| `trayMoveToCurrentDesktop` | `false` | **Custom.** Show on the current virtual desktop ([tray.ts:116](../src/tray.ts#L116), [:147](../src/tray.ts#L147), [index.ts:796](../src/index.ts#L796)). See [custom/virtual-desktop.md](custom/virtual-desktop.md) |
 | `autoResetAppCache` | `false` | Clear the HTTP cache 20 s after start |
 | `resumeOnStart` | `true` | Load `url` instead of the home page ([index.ts:427](../src/index.ts#L427)) |
 | `likeButtons` | `''` | `''` (default), `'force'`, `'hide'` ([renderer.ts:434-452](../src/renderer.ts#L434)) |
@@ -359,7 +358,7 @@ Argument parsing: the `ArgsType<T> = T | string[] | undefined` parsers ([song-co
 | quality-changer | `peard:quality-changer` (invoke: quality dialog) |
 | sponsorblock | `sponsorblock-skip` (M→R segments) |
 | synced-lyrics | `synced-lyrics:fetch` (invoke: net fetch through main) |
-| notifications (hover popup) | No IPC: popup buttons set `document.title = 'act:<cmd>'`, read via `page-title-updated` ([hover-popup.ts:53](../src/plugins/notifications/hover-popup.ts#L53)) |
+| tray-hover (hover popup) | No IPC: popup buttons set `document.title = 'act:<cmd>'`, read via `page-title-updated` ([tray-hover/popup.ts](../src/plugins/tray-hover/popup.ts)) |
 
 ---
 
@@ -448,9 +447,11 @@ Two app-store paths appear in the code, both as written. `getAppStore()` uses `#
 - `sendSongInfo` takes `api.getPlayerResponse()` and adds the album from `playerOverlays…browserMediaSession…album`, `elapsedSeconds=0` and `isPaused=false`. It then sends **`peard:video-src-changed`** ([:433-456](../src/providers/song-info-front.ts#L433)).
 - Since 2026-10-01 the listeners use the app store or the `<video>` element when the new bar is present (table in the [IPC reference](#song-info-pipeline)).
 
-### youtube-language.ts
+### song-time.ts
 
-[src/providers/youtube-language.ts](../src/providers/youtube-language.ts), main. `forceEnglishInterface(session)` pins the YouTube interface to English by setting `hl=en` in the `PREF` cookie. It keeps the other PREF keys, uses domain `.youtube.com`, and sets a 2-year expiry ([:13-39](../src/providers/youtube-language.ts#L13)). It also re-applies `hl=en` on every `cookies.changed` for PREF (once per process, [:41-51](../src/providers/youtube-language.ts#L41)). It is called from `createMainWindow` before `loadURL` ([index.ts:519](../src/index.ts#L519)). See [custom/interface-language.md](custom/interface-language.md).
+[src/providers/song-time.ts](../src/providers/song-time.ts), renderer. YouTube plays songs gapless through one media stream (2026-10), so the `<video>` element's `currentTime`/`duration` are stream time, and YouTube replaces the element at some song changes. Helpers: `getPlayerApi()`, `getVideo()` (query fresh, never cache), `getSongTime()` (`api.getCurrentTime()`), `getSongDuration()` (`getProgressState().seekableEnd`; `getDuration()` reports only what has loaded while a track streams in), `seekSong(s)` (`api.seekTo(s, true)`; writing `currentTime` past the buffered end makes YouTube skip a track). Used by limited-repeat, playback-recovery and song-info-front. See [player-bar.md](player-bar.md#the-gapless-media-timeline-2026-10).
+
+(The English PREF-cookie pin that used to be `youtube-language.ts` here is now the `english-interface` plugin: [custom/interface-language.md](custom/interface-language.md).)
 
 ---
 
@@ -462,7 +463,7 @@ Two app-store paths appear in the code, both as written. `getAppStore()` uses `#
 - Icon: 16 px × the primary display scale on Windows. Paused and playing icons (white on macOS) ([:81-98](../src/tray.ts#L81)).
 - Default click ([:109-123](../src/tray.ts#L109)):
   - with `trayClickPlayPause` set: play/pause
-  - otherwise: toggle hide/show, using `showOnCurrentDesktop` when `trayMoveToCurrentDesktop` is set
+  - otherwise: toggle hide/show through `showWindow(win)` (a plugin may replace how it shows; virtual-desktop does)
 - Context menu: Play/Pause, Next, Previous, Show, Restart, Quit ([:125-168](../src/tray.ts#L125)).
 - `registerCallback` updates the tooltip ("artist - title") and the paused icon, ignoring `TimeChanged` ([:170-189](../src/tray.ts#L170)).
 - **Handler queueing (custom):**
@@ -471,7 +472,8 @@ Two app-store paths appear in the code, both as written. `getAppStore()` uses `#
   - Click and double-click replace existing listeners. A queued mouse-move is *added* without `removeAllListeners`.
   - If `options.tray` is off, the queued handlers are never applied.
 - `getTrayBounds()` ([:71](../src/tray.ts#L71)).
-- Callers: notifications `interactive.ts` (click / double-click) and `hover-popup.ts` (mouse-move, bounds). See [custom/tray-hover-mini-player.md](custom/tray-hover-mini-player.md).
+- `getTrayMouseMoveListenerCount()` (diagnostics: -1 no tray, 0 hover handler lost).
+- Callers: notifications `interactive.ts` (click / double-click) and the tray-hover plugin's `popup.ts` (mouse-move, bounds). See [custom/tray-hover-mini-player.md](custom/tray-hover-mini-player.md).
 
 ### Application menu ([src/menu.ts](../src/menu.ts))
 
@@ -502,7 +504,6 @@ Options
 ├─ Start at login ☐       [Win/macOS]  options.startAtLogin
 ├─ Tray ▸ Disabled / Enabled+show app / Enabled+hide app (radio: tray+appVisible)
 │         ── Play/Pause on click ☐     options.trayClickPlayPause
-│            Move to current desktop ☐ options.trayMoveToCurrentDesktop   (custom)
 ├─ Language ▸ help-translate link + one checkbox per resource   options.language
 └─ Advanced ▸ Set proxy… / Override user agent ☐ / Disable HW accel ☐ /
               Restart on config changes ☐ / Auto reset app cache ☐ / ── /
@@ -513,15 +514,16 @@ Most items use `config.setMenuOption` (restart if `restartOnConfigChanges`). `st
 
 ### Window utils ([src/window-utils.ts](../src/window-utils.ts))
 
-`showOnCurrentDesktop(win)` = `setVisibleOnAllWorkspaces(true)` → `show()` → `setVisibleOnAllWorkspaces(false)`, which leaves the window on the active virtual desktop ([:8-12](../src/window-utils.ts#L8)). It is custom and used by the tray click, the tray "Show" item and `second-instance`. See [custom/virtual-desktop.md](custom/virtual-desktop.md).
+`showWindow(win, { focus })` shows the main window: `show()`, then `focus()` if asked. `setShowWindowHandler(fn | null)` lets a plugin replace that; the virtual-desktop plugin installs its show-on-current-desktop handler there. Called by the tray click, the tray "Show" item (`focus: true`) and `second-instance` (`focus: true`). See [custom/virtual-desktop.md](custom/virtual-desktop.md).
 
 ### Custom (non-upstream) features touching core
 
 | Feature | Core files touched | Doc |
 |---|---|---|
-| Virtual-desktop-aware show | [window-utils.ts](../src/window-utils.ts), [tray.ts](../src/tray.ts), [index.ts:796-803](../src/index.ts#L796), [menu.ts:481-493](../src/menu.ts#L481), `trayMoveToCurrentDesktop` in [defaults.ts](../src/config/defaults.ts) | [custom/virtual-desktop.md](custom/virtual-desktop.md) |
+| Show-window hook (for the virtual-desktop plugin) | [window-utils.ts](../src/window-utils.ts), [tray.ts](../src/tray.ts), `second-instance` in [index.ts](../src/index.ts) | [custom/virtual-desktop.md](custom/virtual-desktop.md) |
 | Tray hover mini-player + handler queueing | [tray.ts:33-71](../src/tray.ts#L33), [tray.ts:191-207](../src/tray.ts#L191) | [custom/tray-hover-mini-player.md](custom/tray-hover-mini-player.md) |
-| English interface pin | [youtube-language.ts](../src/providers/youtube-language.ts), [index.ts:518-521](../src/index.ts#L518) | [custom/interface-language.md](custom/interface-language.md) |
+| Song-relative time on the gapless player | [song-time.ts](../src/providers/song-time.ts), [song-info-front.ts](../src/providers/song-info-front.ts) | [player-bar.md](player-bar.md#the-gapless-media-timeline-2026-10) |
+| Fork settings migration (`migrateForkSettings`) | [store.ts](../src/config/store.ts) | [changelog.md](changelog.md) |
 | New player bar (`ytmusic-miniplayer`) support | [dom-elements.ts](../src/providers/dom-elements.ts), [renderer.ts](../src/renderer.ts), [song-info-front.ts](../src/providers/song-info-front.ts) | [player-bar.md](player-bar.md) |
 
 ---
